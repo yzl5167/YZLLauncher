@@ -32,15 +32,30 @@ jobs:
       - name: 安装 Inno Setup 6
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile "$env:TEMP\is.exe" -UseBasicParsing
-          Start-Process -Wait -FilePath "$env:TEMP\is.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-"
-          Get-ChildItem "C:\Program Files (x86)\Inno Setup*" | Select-Object FullName
+          $iscc = Get-ChildItem "C:\Program Files (x86)\Inno Setup*\ISCC.exe","C:\Program Files\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $iscc) {
+            Write-Host "== try choco =="
+            choco install innosetup -y --no-progress *> choco.log 2>&1
+            $iscc = Get-ChildItem "C:\Program Files (x86)\Inno Setup*\ISCC.exe","C:\Program Files\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $iscc) {
+            Write-Host "== try winget =="
+            winget install --id JRSoftware.InnoSetup -e --source winget --accept-source-agreements --accept-package-agreements --silent --disable-interactivity *> winget.log 2>&1
+            $iscc = Get-ChildItem "C:\Program Files (x86)\Inno Setup*\ISCC.exe","C:\Program Files\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $iscc) {
+            Write-Host "== try direct download =="
+            Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile "$env:TEMP\is.exe" -UseBasicParsing
+            Start-Process -Wait -FilePath "$env:TEMP\is.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-"
+            $iscc = Get-ChildItem "C:\Program Files (x86)\Inno Setup*\ISCC.exe","C:\Program Files\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $iscc) { Write-Error "All Inno Setup install methods failed"; exit 1 }
+          Write-Host "ISCC found: $($iscc.FullName)"
       - name: 构建独立安装包 (Inno Setup)
         shell: pwsh
         run: |
-          $iscc = Get-ChildItem "C:\Program Files (x86)\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $iscc = Get-ChildItem "C:\Program Files (x86)\Inno Setup*\ISCC.exe","C:\Program Files\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $iscc) { Write-Error "ISCC not found"; exit 1 }
-          Write-Host "Using ISCC: $($iscc.FullName)"
           & $iscc.FullName "YZLLauncher.iss"
           Get-ChildItem Output | Select-Object Name,Length
       - name: 发布 Release v1.0.0
@@ -56,4 +71,15 @@ jobs:
           else
             gh release create v1.0.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.0.0" --notes "Windows 独立安装包（免 Python）" \
               dist/YZLLauncher.exe
+          fi
+      - name: 上传失败日志
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat choco.log winget.log 2>/dev/null | head -c 20000 > build/install.log
+          if [ -s build/install.log ]; then
+            gh api -X PUT repos/yzl5167/YZLLauncher/contents/build/install.log \
+              -f message="install log" -f content="$(base64 -w0 build/install.log)" || echo upload-failed
           fi
