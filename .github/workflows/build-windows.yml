@@ -20,40 +20,26 @@ jobs:
         shell: pwsh
         run: |
           [IO.File]::WriteAllBytes("$PWD\assets\icon.ico", [Convert]::FromBase64String((Get-Content "$PWD\assets\icon.ico.b64" -Raw).Trim()))
-          Get-Item "$PWD\assets\icon.ico" | Select-Object Name,Length
       - name: 安装依赖
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt pyinstaller
-          python -c "import PyInstaller; print('PyInstaller', PyInstaller.__version__)"
-          where python pyinstaller
       - name: 构建独立 exe (PyInstaller)
-        continue-on-error: true
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "YZLLauncher" --collect-all customtkinter main.py *> pyinstaller.log 2>&1
-          Write-Host "pyinstaller exit: $LASTEXITCODE"
-          exit $LASTEXITCODE
-      - name: 上传构建日志
-        if: always()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "YZLLauncher" --collect-all customtkinter main.py
+          Get-Item dist\YZLLauncher.exe | Select-Object Name,Length
+      - name: 安装 Inno Setup 6
+        shell: pwsh
         run: |
-          if [ -f pyinstaller.log ]; then
-            gh api -X PUT repos/yzl5167/YZLLauncher/contents/build/pyinstaller.log \
-              -f message="build log from action" -f content="$(base64 -w0 pyinstaller.log)" || echo "upload failed"
-          else
-            echo "no log file"
-          fi
-      - name: 安装 Inno Setup 6 (winget)
-        run: |
-          winget install --id JRSoftware.InnoSetup -e --accept-source-agreements --accept-package-agreements --silent
+          Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile "$env:TEMP\is.exe" -UseBasicParsing
+          Start-Process -Wait -FilePath "$env:TEMP\is.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-"
+          Get-ChildItem "C:\Program Files (x86)\Inno Setup*" | Select-Object FullName
       - name: 构建独立安装包 (Inno Setup)
         shell: pwsh
         run: |
-          $iscc = Get-ChildItem "C:\Program Files (x86)\Inno Setup*\ISCC.exe", "C:\Program Files\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $iscc) { throw "ISCC.exe not found after install" }
+          $iscc = Get-ChildItem "C:\Program Files (x86)\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $iscc) { Write-Error "ISCC not found"; exit 1 }
           Write-Host "Using ISCC: $($iscc.FullName)"
           & $iscc.FullName "YZLLauncher.iss"
           Get-ChildItem Output | Select-Object Name,Length
@@ -62,6 +48,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ls -la dist Output
-          gh release create v1.0.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.0.0" --notes "Windows 独立安装包（免 Python）" \
-            "dist/YZLLauncher.exe" "Output/YZLLauncher-Setup-1.0.0.exe"
+          ls -la dist 2>/dev/null || true
+          ls -la Output 2>/dev/null || true
+          if [ -f "Output/YZLLauncher-Setup-1.0.0.exe" ]; then
+            gh release create v1.0.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.0.0" --notes "Windows 独立安装包（免 Python）" \
+              dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.0.0.exe"
+          else
+            gh release create v1.0.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.0.0" --notes "Windows 独立安装包（免 Python）" \
+              dist/YZLLauncher.exe
+          fi
