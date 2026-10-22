@@ -108,6 +108,7 @@ class VersionPicker(ctk.CTkToplevel):
         self.app.run_async(fn)
 
 
+
 # ================= 首页 =================
 class HomePage(Page):
     def on_show(self) -> None:
@@ -504,35 +505,17 @@ class ModsPage(Page):
             font=(theme.ui_font(), 12), command=lambda: _open_path(self.app.cfg.game_dir() / "mods"),
         ).pack(side="right")
 
-        # 目标版本 + 加载器
+        # 目标版本 + 加载器（版本固定跟随「首页当前所选版本」，自动适配，无需手动选）
         cfg = self.app.cfg
-        local = vc.list_local_versions(cfg.game_dir())
-        bases = []
-        seen = set()
-        for vid in local:
-            b = mods_core.base_mc_version(cfg.game_dir(), vid)
-            if b not in seen:
-                seen.add(b)
-                bases.append(b)
-        if not bases:
-            bases = ["1.21.1"]
-        cur_base = mods_core.base_mc_version(cfg.game_dir(), cfg.get("current_version") or "") or bases[0]
-        if cur_base not in bases:
-            cur_base = bases[0]
+        cur_base = mods_core.base_mc_version(cfg.game_dir(), cfg.get("current_version") or "")
+        if not cur_base:
+            cur_base = "1.21.1"
+        self._mc_version = cur_base
 
         ctrl = ctk.CTkFrame(pad, fg_color="transparent")
         ctrl.pack(fill="x", pady=(0, 10))
-        ctk.CTkLabel(ctrl, text="游戏版本", text_color=theme.SUB,
-                     font=(theme.ui_font(), 12)).pack(side="left", padx=(0, 8))
-        self.mc_menu = ctk.CTkOptionMenu(
-            ctrl, values=bases, width=130, height=34, corner_radius=10,
-            fg_color=theme.CARD_2, button_color=theme.CARD_2, button_hover_color=theme.BORDER,
-            text_color=theme.TEXT, dropdown_fg_color=theme.CARD_2, dropdown_hover_color=theme.BORDER,
-            font=(theme.ui_font(), 12), dropdown_font=(theme.ui_font(), 12),
-        )
-        self.mc_menu.set(cur_base)
-        self.mc_menu.pack(side="left", padx=(0, 16))
-
+        ctk.CTkLabel(ctrl, text=f"当前版本 {cur_base}", text_color=theme.CYAN,
+                     font=(theme.ui_font(), 13, "bold")).pack(side="left", padx=(0, 16))
         ctk.CTkLabel(ctrl, text="加载器", text_color=theme.SUB,
                      font=(theme.ui_font(), 12)).pack(side="left", padx=(0, 8))
         auto_loader = mods_core.detect_loader(cfg.game_dir(), cfg.get("current_version") or "")
@@ -574,7 +557,7 @@ class ModsPage(Page):
         return self.loader_menu.get().lower()
 
     def _mc(self) -> str:
-        return self.mc_menu.get()
+        return getattr(self, "_mc_version", "") or ""
 
     def _curated(self) -> None:
         for w in self.list_box.winfo_children():
@@ -585,7 +568,7 @@ class ModsPage(Page):
             text_color=theme.SUB, font=(theme.ui_font(), 11),
         ).pack(anchor="w", padx=6, pady=(0, 6))
         for slug, title, desc in mods_core.CURATED:
-            self._add_mod_card(slug, title, desc)
+            self._add_mod_card(slug, title, desc, fetch_icon=False)
 
     def _search(self) -> None:
         q = self.mod_search.get().strip()
@@ -610,7 +593,8 @@ class ModsPage(Page):
 
         self.app.run_async(work, done)
 
-    def _add_mod_card(self, slug: str, title: str, desc: str, icon: str | None = None) -> None:
+    def _add_mod_card(self, slug: str, title: str, desc: str, icon: str | None = None,
+                      fetch_icon: bool = True) -> None:
         card = Card(self.list_box, corner_radius=14)
         card.pack(fill="x", pady=4)
         inner = ctk.CTkFrame(card, fg_color="transparent")
@@ -637,17 +621,15 @@ class ModsPage(Page):
 
         if icon:
             async_set_icon(self.app, icon_label, icon, 40)
-
-        def fetch_icon():
-            try:
-                return mods_core.project_info(slug).get("icon_url")
-            except Exception:
-                return None
-
-        if not icon:
-            def done(u):
+        elif fetch_icon:
+            def _fetch():
+                try:
+                    return mods_core.project_info(slug).get("icon_url")
+                except Exception:
+                    return None
+            def _done(u):
                 async_set_icon(self.app, icon_label, u, 40)
-            self.app.run_async(fetch_icon, done)
+            self.app.run_async(_fetch, _done)
 
     def _pick_version(self, slug: str, title: str) -> None:
         loader = self._loader()
@@ -746,7 +728,7 @@ class ShadersPage(Page):
             text_color=theme.SUB, font=(theme.ui_font(), 11),
         ).pack(anchor="w", padx=6, pady=(0, 6))
         for slug, title, desc in sh_core.CURATED:
-            self._add_card(slug, title, desc)
+            self._add_card(slug, title, desc, fetch_icon=False)
 
     def _search(self) -> None:
         q = self.shader_search.get().strip()
@@ -771,7 +753,8 @@ class ShadersPage(Page):
 
         self.app.run_async(work, done)
 
-    def _add_card(self, slug: str, title: str, desc: str, icon: str | None = None) -> None:
+    def _add_card(self, slug: str, title: str, desc: str, icon: str | None = None,
+                  fetch_icon: bool = True) -> None:
         card = Card(self.list_box, corner_radius=14)
         card.pack(fill="x", pady=4)
         inner = ctk.CTkFrame(card, fg_color="transparent")
@@ -797,16 +780,15 @@ class ShadersPage(Page):
 
         if icon:
             async_set_icon(self.app, icon_label, icon, 40)
-        else:
-            def fetch():
+        elif fetch_icon:
+            def _fetch():
                 try:
                     return sh_core.project_info(slug).get("icon_url")
                 except Exception:
                     return None
-
-            def done(u):
+            def _done(u):
                 async_set_icon(self.app, icon_label, u, 40)
-            self.app.run_async(fetch, done)
+            self.app.run_async(_fetch, _done)
 
     def _pick_version(self, slug: str, title: str) -> None:
         mc = mods_core.base_mc_version(self.app.cfg.game_dir(), self.app.cfg.get("current_version") or "")
