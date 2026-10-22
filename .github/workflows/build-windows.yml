@@ -25,13 +25,27 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt pyinstaller
+          python -c "import PyInstaller; print('PyInstaller', PyInstaller.__version__)"
+          where python pyinstaller
       - name: 构建独立 exe (PyInstaller)
+        continue-on-error: true
+        shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed `
-            --name "YZLLauncher" `
-            --collect-all customtkinter `
-            main.py
-          ls -la dist
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "YZLLauncher" --collect-all customtkinter main.py *> pyinstaller.log 2>&1
+          Write-Host "pyinstaller exit: $LASTEXITCODE"
+          exit $LASTEXITCODE
+      - name: 上传构建日志
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f pyinstaller.log ]; then
+            gh api -X PUT repos/yzl5167/YZLLauncher/contents/build/pyinstaller.log \
+              -f message="build log from action" -f content="$(base64 -w0 pyinstaller.log)" || echo "upload failed"
+          else
+            echo "no log file"
+          fi
       - name: 安装 Inno Setup 6 (winget)
         run: |
           winget install --id JRSoftware.InnoSetup -e --accept-source-agreements --accept-package-agreements --silent
