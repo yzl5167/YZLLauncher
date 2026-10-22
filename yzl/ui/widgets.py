@@ -1,128 +1,203 @@
-"""通用 UI 组件：卡片、渐变按钮、徽标、图标加载缓存。"""
+"""自绘组件：渐变按钮、圆角渐变卡片、徽章、图标加载等。"""
 from __future__ import annotations
 
 import hashlib
+import math
+import tkinter as tk
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import customtkinter as ctk
-from PIL import Image
 
-from yzl import theme
+from yzl.constants import app_root
+from yzl.ui import theme
 
 
-def _sys_font() -> str:
-    import sys
-    if sys.platform.startswith("win"):
-        return "Microsoft YaHei UI"
-    if sys.platform == "darwin":
-        return "PingFang SC"
-    return "Noto Sans CJK SC"
+# ---------------- 图标下载与缓存 ----------------
+def icon_cache_dir() -> Path:
+    d = app_root() / ".cache" / "icons"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def icon_path(url: str) -> Optional[Path]:
-    """把远程图标缓存到本地 .cache/icons，返回本地路径（失败返回 None）。"""
-    try:
-        from yzl.core.net import get_bytes
-        from yzl.constants import app_root
-        cache = app_root() / ".cache" / "icons"
-        cache.mkdir(parents=True, exist_ok=True)
-        name = hashlib.sha1(url.encode()).hexdigest() + ".png"
-        dest = cache / name
-        if dest.exists():
-            return dest
-        data = get_bytes(url, timeout=15)
-        if not data:
-            return None
-        dest.write_bytes(data)
+    """下载（或命中缓存）并返回本地图标路径；失败返回 None。"""
+    if not url:
+        return None
+    key = hashlib.sha1(url.encode()).hexdigest()[:16]
+    dest = icon_cache_dir() / f"{key}.png"
+    if dest.exists() and dest.stat().st_size > 0:
         return dest
+    try:
+        from yzl.core.net import download_file
+
+        ok = download_file(url, dest, timeout=30)
+        return dest if ok else None
     except Exception:
         return None
 
 
-def load_icon_photo(url: str, size: int) -> Optional[ctk.CTkImage]:
-    """下载并缩放图标为 PhotoImage，失败返回 None。"""
+def load_icon_photo(url: str, size: int = 40):
+    """返回缩放到 size 的 PhotoImage（需持有引用）；失败返回 None。"""
+    try:
+        from PIL import Image, ImageTk
+    except Exception:
+        return None
     p = icon_path(url)
     if not p:
         return None
     try:
-        img = Image.open(p)
-        img = img.resize((size, size), Image.LANCZOS)
-        return ctk.CTkImage(light_image=img, dark_image=img, size=(size, size))
+        img = Image.open(p).convert("RGBA")
+        img.thumbnail((size, size), Image.LANCZOS)
+        return ImageTk.PhotoImage(img)
     except Exception:
         return None
 
 
-class Card(ctk.CTkFrame):
-    def __init__(self, master, *a, **kw):
-        kw.setdefault("fg_color", theme.CARD)
-        kw.setdefault("border_color", theme.BORDER)
-        kw.setdefault("border_width", 1)
-        super().__init__(master, *a, **kw)
+def lerp_color(c1: str, c2: str, t: float) -> str:
+    def ch(c: str) -> tuple[int, int, int]:
+        c = c.lstrip("#")
+        return tuple(int(c[i:i + 2], 16) for i in (0, 2, 4))
+
+    a, b = ch(c1), ch(c2)
+    rgb = tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
+    return "#%02x%02x%02x" % rgb
 
 
-def tag(master, text, color="#8A97B5") -> ctk.CTkLabel:
-    return ctk.CTkLabel(
-        master, text=text, text_color=color, corner_radius=8,
-        fg_color=theme.CARD_2, font=(_sys_font(), 10),
-        padx=8, pady=2,
-    )
+def draw_gradient(
+    canvas: tk.Canvas, w: int, h: int, c1: str, c2: str,
+    corner: int = 0, x0: int = 0, y0: int = 0,
+) -> None:
+    """在画布 (x0,y0) 起绘制（可圆角裁剪的）垂直渐变，w×h 区域。"""
+    canvas.delete("gradient")
+    corner = min(corner, h // 2, w // 2)
+    for y in range(h):
+        if y < corner:
+            inset = corner - math.sqrt(max(0.0, corner * corner - (corner - y) ** 2))
+        elif y >= h - corner:
+            yy = h - 1 - y
+            inset = corner - math.sqrt(max(0.0, corner * corner - (corner - yy) ** 2))
+        else:
+            inset = 0
+        xa, xb = x0 + inset, x0 + w - inset
+        if xb > xa:
+            canvas.create_line(
+                xa, y0 + y, xb, y0 + y,
+                fill=lerp_color(c1, c2, y / max(1, h - 1)), tags="gradient",
+            )
 
 
-class GradientButton(ctk.CTkButton):
-    def __init__(self, master, text="", command=None, width=160, height=44, corner=14, font_size=15, **kw):
-        super().__init__(
-            master, text=text, command=command, width=width, height=height,
-            corner_radius=corner, font=(_sys_font(), font_size),
-            fg_color="#1E2A46", hover_color="#294066", text_color="#FFFFFF",
-            **kw,
+def attach_gradient(
+    canvas: tk.Canvas, c1: str, c2: str, corner: int = 0,
+    x0: int = 0, y0: int = 0, h: int | None = None,
+) -> None:
+    """随画布尺寸自动重绘渐变。"""
+
+    def redraw(_e=None) -> None:
+        w, hh = canvas.winfo_width(), h or canvas.winfo_height()
+        if w > 2 and hh > 2:
+            draw_gradient(canvas, w - x0 * 2, hh - y0 * 2, c1, c2, corner, x0, y0)
+
+    canvas.bind("<Configure>", redraw)
+    canvas.after(30, redraw)
+
+
+class GradientButton(tk.Canvas):
+    """圆角渐变按钮（自绘），支持 hover 高亮。"""
+
+    def __init__(
+        self,
+        master,
+        text: str,
+        command: Optional[Callable] = None,
+        width: int = 300,
+        height: int = 68,
+        corner: int = 20,
+        c1: str = theme.GRAD_TOP,
+        c2: str = theme.GRAD_BOT,
+        font_size: int = 20,
+        text_color: str = "#FFFFFF",
+        bold: bool = True,
+    ) -> None:
+        super().__init__(master, width=width, height=height, bg=theme.BG, highlightthickness=0, bd=0)
+        self.command = command
+        self.w, self.h = width, height
+        self.corner = corner
+        self.c1, self.c2 = c1, c2
+        self.text = text
+        self.font_size = font_size
+        self.text_color = text_color
+        self.bold = bold
+        self._hover = False
+        self._pressed = False
+        self.bind("<Button-1>", self._on_click)
+        self.bind("<Enter>", lambda e: self._set_hover(True))
+        self.bind("<Leave>", lambda e: self._set_hover(False))
+        self.bind("<ButtonPress-1>", lambda e: self._set_pressed(True))
+        self.bind("<ButtonRelease-1>", lambda e: self._set_pressed(False))
+        self.redraw()
+
+    def _set_hover(self, v: bool) -> None:
+        if v != self._hover:
+            self._hover = v
+            self.redraw()
+
+    def _set_pressed(self, v: bool) -> None:
+        if v != self._pressed:
+            self._pressed = v
+            self.redraw()
+
+    def _on_click(self, _e) -> None:
+        if self.command:
+            self.command()
+
+    def redraw(self) -> None:
+        c1 = self.c1
+        c2 = self.c2
+        if self._hover:
+            c1 = lerp_color(c1, "#FFFFFF", 0.12)
+            c2 = lerp_color(c2, "#FFFFFF", 0.12)
+        if self._pressed:
+            c1 = lerp_color(c1, "#000000", 0.18)
+            c2 = lerp_color(c2, "#000000", 0.18)
+        draw_gradient(self, self.w, self.h, c1, c2, self.corner)
+        weight = "bold" if self.bold else "normal"
+        self.create_text(
+            self.w / 2, self.h / 2,
+            text=self.text,
+            fill=self.text_color,
+            font=(theme.ui_font(), self.font_size, weight),
+            tags="gradient",
         )
 
 
-class ProgressBar(ctk.CTkFrame):
-    def __init__(self, master, width=300, height=10, color=theme.CYAN):
-        super().__init__(master, fg_color=theme.CARD_2, width=width, height=height, corner_radius=height // 2)
-        self._fill = ctk.CTkFrame(self, fg_color=color, corner_radius=height // 2, width=0)
-        self._fill.pack(side="left", fill="y")
-        self._pct = 0.0
-        self._width = width
-
-    def set(self, pct: float) -> None:
-        self._pct = max(0.0, min(1.0, pct))
-        try:
-            w = int(self._width * self._pct)
-            self._fill.configure(width=max(w, 2))
-        except Exception:
-            pass
-
-    def get(self) -> float:
-        return self._pct
+class Card(ctk.CTkFrame):
+    def __init__(self, master, **kw) -> None:
+        kw.setdefault("fg_color", theme.CARD)
+        kw.setdefault("corner_radius", 18)
+        kw.setdefault("border_width", 1)
+        kw.setdefault("border_color", theme.BORDER)
+        super().__init__(master, **kw)
 
 
-def attach_gradient(canvas, c1: str, c2: str, corner: int = 16) -> None:
-    """给 CTkCanvas 画一条渐变背景。"""
-    try:
-        canvas.update_idletasks()
-        w = max(canvas.winfo_width(), 1)
-        h = max(canvas.winfo_height(), 1)
-        canvas.delete("all")
-        r = int(corner)
-        canvas.create_rectangle(0, 0, w, h, fill=c1, outline="")
-        steps = 48
-        for i in range(steps):
-            f = i / steps
-            col = _blend(c1, c2, f)
-            canvas.create_rectangle(0, int(h * i / steps), w, int(h * (i + 1) / steps), fill=col, outline="")
-        canvas.create_rectangle(0, 0, w, h, outline=c2, width=1)
-    except Exception:
-        pass
+def tag(master, text: str, color: str = theme.CYAN, bg: str = theme.CARD_2, size: int = 11) -> ctk.CTkLabel:
+    return ctk.CTkLabel(
+        master, text=text, text_color=color, font=(theme.ui_font(), size),
+        fg_color=bg, corner_radius=8, padx=8, pady=2,
+    )
 
 
-def _blend(a: str, b: str, f: float) -> str:
-    def _c(h):
-        h = h.lstrip("#")
-        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
-
-    ca, cb = _c(a), _c(b)
-    col = tuple(int(ca[i] + (cb[i] - ca[i]) * f) for i in range(3))
-    return "#%02x%02x%02x" % col
+def nav_button(master, text: str, command: Callable, selected: bool = False) -> ctk.CTkButton:
+    return ctk.CTkButton(
+        master,
+        text=text,
+        command=command,
+        anchor="w",
+        font=(theme.ui_font(), 14),
+        fg_color=theme.CARD_2 if selected else "transparent",
+        hover_color=theme.CARD_2,
+        text_color=theme.CYAN if selected else theme.TEXT,
+        corner_radius=12,
+        height=44,
+        border_width=0,
+    )
