@@ -58,18 +58,18 @@ jobs:
           if (-not $iscc) { Write-Error "ISCC not found"; exit 1 }
           & $iscc.FullName "YZLLauncher.iss"
           Get-ChildItem Output | Select-Object Name,Length
-      - name: 发布 Release v1.3.1
+      - name: 发布 Release v1.3.2
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -la dist 2>/dev/null || true
           ls -la Output 2>/dev/null || true
-          gh release delete v1.3.1 --yes --cleanup-tag 2>/dev/null || true
-          if [ -f "Output/YZLLauncher-Setup-1.3.1.exe" ]; then
-            gh release create v1.3.1 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.1" --notes "修复：添加账户后首页空白" \
-              dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.3.1.exe"
+          gh release delete v1.3.2 --yes --cleanup-tag 2>/dev/null || true
+          if [ -f "Output/YZLLauncher-Setup-1.3.2.exe" ]; then
+            gh release create v1.3.2 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.2" --notes "修复：页面崩溃/首页空白；去掉模组版本选择器；优化界面卡顿" \
+              dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.3.2.exe"
           else
-            gh release create v1.3.1 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.1" --notes "修复：添加账户后首页空白" \
+            gh release create v1.3.2 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.2" --notes "修复：页面崩溃/首页空白；去掉模组版本选择器；优化界面卡顿" \
               dist/YZLLauncher.exe
           fi
