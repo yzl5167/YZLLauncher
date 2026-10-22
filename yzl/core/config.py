@@ -8,19 +8,19 @@ from typing import Any, Optional
 from yzl.constants import config_file, default_game_dir
 
 DEFAULTS: dict[str, Any] = {
-    "game_dir": None,
-    "java_path": "",
+    "game_dir": None,          # None -> 便携目录
+    "java_path": "",           # 空 -> 自动探测
     "memory_mb": 2048,
-    "mirror": "bmclapi",
-    "width": 0,
+    "mirror": "bmclapi",       # mojang / bmclapi
+    "width": 0,                # 0 -> 游戏默认
     "height": 0,
     "download_threads": 8,
-    "accounts": [],
+    "accounts": [],            # [{name, uuid, type, access_token?, skin?}]
     "current_account": None,
-    "current_version": None,
+    "current_version": None,   # 最近使用的版本 id
     "first_run": True,
     "microsoft_client_id": "00000000402b5328",
-    "offline_skin": {},
+    "offline_skin": {},        # {name: skin_path} 离线本地皮肤
 }
 
 
@@ -37,15 +37,18 @@ class Config:
                 if isinstance(raw, dict):
                     self.data.update(raw)
         except Exception:
-            pass
+            pass  # 配置损坏时回退默认
 
     def save(self) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
+            self.path.write_text(
+                json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
         except Exception:
             pass
 
+    # ---- 便捷访问 ----
     def get(self, key: str, default: Any = None) -> Any:
         return self.data.get(key, default if default is not None else DEFAULTS.get(key))
 
@@ -61,7 +64,18 @@ class Config:
         return self.data.get("accounts", [])
 
     def current_account(self) -> Optional[dict]:
+        """返回当前账户 dict；兼容旧数据把 current_account 存成名字字符串的情况。"""
         ca = self.data.get("current_account")
-        if ca is None and self.accounts():
-            ca = self.accounts()[0]
-        return ca
+        name = None
+        if isinstance(ca, str):
+            name = ca
+        elif isinstance(ca, dict):
+            name = ca.get("name")
+        if name is None and self.accounts():
+            name = self.accounts()[0]["name"]
+        if name is None:
+            return None
+        for a in self.accounts():
+            if a.get("name") == name:
+                return a
+        return None
