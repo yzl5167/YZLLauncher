@@ -1,0 +1,42 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 解码图标
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path assets | Out-Null
+          [IO.File]::WriteAllBytes("$PWD\assets\icon.ico", [Convert]::FromBase64String((Get-Content "$PWD\assets\icon.ico.b64" -Raw).Trim()))
+      - name: 安装依赖
+        run: |
+          pip install -r requirements.txt pyinstaller
+      - name: 构建独立 exe
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name "YZLLauncher" --icon assets\icon.ico main.py
+      - name: 构建独立安装包 (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "YZLLauncher.iss"
+      - name: 发布 Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -la dist Output
+          gh release create v1.0.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.0.0" --notes "Windows 独立安装包（免 Python）" \
+            "dist/YZLLauncher.exe" "Output/YZLLauncher-Setup-1.0.0.exe"
