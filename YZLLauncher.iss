@@ -1,6 +1,6 @@
 ; YZL Launcher - Inno Setup installer script (ASCII/English to avoid encoding issues)
 #define MyAppName "YZL Launcher"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "YZL"
 #define MyAppExeName "YZLLauncher.exe"
 
