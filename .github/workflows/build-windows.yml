@@ -58,28 +58,17 @@ jobs:
           if (-not $iscc) { Write-Error "ISCC not found"; exit 1 }
           & $iscc.FullName "YZLLauncher.iss"
           Get-ChildItem Output | Select-Object Name,Length
-      - name: 发布 Release v1.0.0
+      - name: 发布 Release v1.2.0
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -la dist 2>/dev/null || true
           ls -la Output 2>/dev/null || true
-          if [ -f "Output/YZLLauncher-Setup-1.0.0.exe" ]; then
-            gh release create v1.0.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.0.0" --notes "Windows 独立安装包（免 Python）" \
-              dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.0.0.exe"
+          if [ -f "Output/YZLLauncher-Setup-1.2.0.exe" ]; then
+            gh release create v1.2.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.2.0" --notes "全版本模组中心 + 光影中心 + 微软正版登录 + 换皮肤" \
+              dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.2.0.exe"
           else
-            gh release create v1.0.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.0.0" --notes "Windows 独立安装包（免 Python）" \
+            gh release create v1.2.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.2.0" --notes "全版本模组中心 + 光影中心 + 微软正版登录 + 换皮肤" \
               dist/YZLLauncher.exe
-          fi
-      - name: 上传失败日志
-        if: always()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cat choco.log winget.log 2>/dev/null | head -c 20000 > build/install.log
-          if [ -s build/install.log ]; then
-            gh api -X PUT repos/yzl5167/YZLLauncher/contents/build/install.log \
-              -f message="install log" -f content="$(base64 -w0 build/install.log)" || echo upload-failed
           fi
