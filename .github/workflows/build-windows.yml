@@ -65,6 +65,7 @@ jobs:
         run: |
           ls -la dist 2>/dev/null || true
           ls -la Output 2>/dev/null || true
+          gh release delete v1.2.0 --yes --cleanup-tag 2>/dev/null || true
           if [ -f "Output/YZLLauncher-Setup-1.2.0.exe" ]; then
             gh release create v1.2.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.2.0" --notes "全版本模组中心 + 光影中心 + 微软正版登录 + 换皮肤" \
               dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.2.0.exe"
