@@ -19,20 +19,33 @@ jobs:
       - name: 解码图标
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path assets | Out-Null
           [IO.File]::WriteAllBytes("$PWD\assets\icon.ico", [Convert]::FromBase64String((Get-Content "$PWD\assets\icon.ico.b64" -Raw).Trim()))
+          Get-Item "$PWD\assets\icon.ico" | Select-Object Name,Length
       - name: 安装依赖
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt pyinstaller
-      - name: 构建独立 exe
+      - name: 构建独立 exe (PyInstaller)
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed --name "YZLLauncher" --icon assets\icon.ico main.py
+          pyinstaller --noconfirm --clean --onefile --windowed `
+            --name "YZLLauncher" `
+            --icon assets\icon.ico `
+            --collect-all customtkinter `
+            --hidden-import tkinter `
+            main.py
+          ls -la dist
+      - name: 安装 Inno Setup 6 (winget)
+        run: |
+          winget install --id JRSoftware.InnoSetup -e --accept-source-agreements --accept-package-agreements --silent
       - name: 构建独立安装包 (Inno Setup)
         shell: pwsh
         run: |
-          choco install innosetup --yes --no-progress
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "YZLLauncher.iss"
-      - name: 发布 Release
+          $iscc = Get-ChildItem "C:\Program Files (x86)\Inno Setup*\ISCC.exe", "C:\Program Files\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $iscc) { throw "ISCC.exe not found after install" }
+          Write-Host "Using ISCC: $($iscc.FullName)"
+          & $iscc.FullName "YZLLauncher.iss"
+          Get-ChildItem Output | Select-Object Name,Length
+      - name: 发布 Release v1.0.0
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
