@@ -6,6 +6,7 @@ def _enable_windows_dpi() -> None:
     if sys.platform.startswith("win"):
         try:
             import ctypes
+
             ctypes.windll.shcore.SetProcessDpiAwareness(1)
         except Exception:
             pass
@@ -16,6 +17,7 @@ def _init_x_threads() -> None:
     if sys.platform.startswith("linux"):
         try:
             import ctypes
+
             lib = ctypes.CDLL("libX11.so.6")
             lib.XInitThreads()
         except Exception:
@@ -23,6 +25,7 @@ def _init_x_threads() -> None:
 
 
 def main() -> None:
+    # 自检模式：不启动图形界面，仅验证打包完整性（供打包产物自测用）
     if "--selftest" in sys.argv:
         import yzl  # noqa: F401
         import yzl.core.config
@@ -33,6 +36,8 @@ def main() -> None:
         import yzl.core.launcher
         import yzl.core.microsoft
         import yzl.core.shaders
+        import yzl.core.javamgr
+        import yzl.core.updater
         import yzl.ui.app
         from yzl.core.net import CURRENT_OS
         from yzl.core.versions import CURRENT_ARCH
