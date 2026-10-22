@@ -6,7 +6,6 @@ def _enable_windows_dpi() -> None:
     if sys.platform.startswith("win"):
         try:
             import ctypes
-
             ctypes.windll.shcore.SetProcessDpiAwareness(1)
         except Exception:
             pass
@@ -17,7 +16,6 @@ def _init_x_threads() -> None:
     if sys.platform.startswith("linux"):
         try:
             import ctypes
-
             lib = ctypes.CDLL("libX11.so.6")
             lib.XInitThreads()
         except Exception:
@@ -33,6 +31,8 @@ def main() -> None:
         import yzl.core.mods
         import yzl.core.auth
         import yzl.core.launcher
+        import yzl.core.microsoft
+        import yzl.core.shaders
         import yzl.ui.app
         from yzl.core.net import CURRENT_OS
         from yzl.core.versions import CURRENT_ARCH
