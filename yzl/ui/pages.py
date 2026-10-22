@@ -8,7 +8,7 @@ from tkinter import filedialog
 
 import customtkinter as ctk
 
-from yzl.core import auth, launcher as lc, mods as mods_core, versions as vc
+from yzl.core import auth, javamgr, launcher as lc, mods as mods_core, versions as vc
 from yzl.core import microsoft as ms_core, shaders as sh_core
 from yzl.core.config import Config
 from yzl.ui import theme
@@ -256,6 +256,31 @@ class HomePage(Page):
         if not acc:
             self.app.notify("账户无效", "请重新选择账户")
             return
+        # Java 自动确保：缺失则自动下载所需版本（Java 8/17/21 等）
+        parent_id = vid
+        try:
+            parent_id = (vc.resolve_version(cfg.game_dir(), vid) or {}).get("inheritsFrom") or vid
+        except Exception:
+            pass
+        jpath = lc.find_java(cfg.get("java_path") or "", mc_version=parent_id)
+        if not jpath:
+            need = javamgr.required_java(parent_id)
+            self.app.notify("正在准备 Java", f"{parent_id} 需要 Java {need}，正在自动下载…")
+
+            def work():
+                return javamgr.ensure(parent_id, auto_download=True)
+
+            def done(j):
+                if j:
+                    self._do_launch(cfg, vid, acc)
+                else:
+                    self.app.notify("Java 下载失败", "请到「设置 → 内置 Java 版本」手动下载")
+
+            self.app.run_async(work, done)
+            return
+        self._do_launch(cfg, vid, acc)
+
+    def _do_launch(self, cfg, vid, acc) -> None:
         try:
             spec = lc.build_launch_spec(cfg, vid, acc)
         except Exception as e:
@@ -655,14 +680,17 @@ class ModsPage(Page):
         self.app.run_async(work, done)
 
     def _install_file(self, f, title: str) -> None:
+        vid = self.app.cfg.get("current_version") or ""
+        base = mods_core.base_mc_version(self.app.cfg.game_dir(), vid)
+
         def work():
             def p(done: int, total: int) -> None:
                 self.app.set_status(f"正在下载 {f.filename}", done / total if total else 0.2)
-            return mods_core.install_mod(f, self.app.cfg.game_dir(), p)
+            return mods_core.install_mod(f, self.app.cfg.game_dir(), base, p)
 
         def done(path: Path) -> None:
             self.app.clear_progress()
-            self.app.notify("模组已安装", f"{title} → mods/{path.name}\n（{f.version}，重启游戏生效）")
+            self.app.notify("模组已安装", f"{title} → mods/{base}/{path.name}\n（已适配 {base}，启动游戏自动加载）")
 
         self.app.run_async(work, done)
 
@@ -1168,6 +1196,22 @@ class SettingsPage(Page):
                       fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
                       font=(theme.ui_font(), 12), command=self._pick_dir).pack(side="left")
 
+        # 内置 Java 版本（按 MC 版本自动匹配 8/17/21）
+        jcard = ctk.CTkFrame(inner, fg_color=theme.CARD_2, corner_radius=12)
+        jcard.pack(fill="x", pady=(10, 2))
+        jtop = ctk.CTkFrame(jcard, fg_color="transparent")
+        jtop.pack(fill="x", padx=14, pady=(10, 6))
+        ctk.CTkLabel(jtop, text="内置 Java 版本", text_color=theme.TEXT,
+                     font=(theme.ui_font(), 13, "bold")).pack(side="left")
+        ctk.CTkLabel(jtop, text="自动按游戏版本选择（1.16↔8 · 1.17-1.20.4↔17 · 1.20.5+↔21）",
+                     text_color=theme.SUB, font=(theme.ui_font(), 10)).pack(side="left", padx=10)
+        ctk.CTkButton(jtop, text="刷新", width=60, height=28, corner_radius=9,
+                      fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
+                      font=(theme.ui_font(), 11), command=self._refresh_java).pack(side="right")
+        self._java_frame = ctk.CTkFrame(jcard, fg_color="transparent")
+        self._java_frame.pack(fill="x", padx=8, pady=(0, 10))
+        self._refresh_java()
+
         # 下载源
         r = row("下载源")
         self.mirror_menu = ctk.CTkOptionMenu(
@@ -1217,6 +1261,41 @@ class SettingsPage(Page):
         ).pack(side="left")
         ctk.CTkLabel(btns, text="提示：1.21 版本需要 Java 21；自动检测会优先使用已安装的 JDK。",
                      text_color=theme.SUB, font=(theme.ui_font(), 11)).pack(side="left", padx=16)
+
+    def _refresh_java(self) -> None:
+        for w in self._java_frame.winfo_children():
+            w.destroy()
+        inst = javamgr.list_installed()
+        for maj in javamgr.SUPPORTED:
+            line = ctk.CTkFrame(self._java_frame, fg_color="transparent")
+            line.pack(fill="x", padx=6, pady=2)
+            ctk.CTkLabel(line, text=f"Java {maj}", width=70, anchor="w",
+                         text_color=theme.TEXT, font=(theme.ui_font(), 12)).pack(side="left")
+            if inst.get(maj):
+                tag(line, "已就绪", color=theme.GREEN).pack(side="left", padx=6)
+                ctk.CTkLabel(line, text=Path(inst[maj]).name, text_color=theme.SUB,
+                             font=(theme.ui_font(), 10)).pack(side="left", padx=4)
+            else:
+                tag(line, "未安装", color=theme.SUB).pack(side="left", padx=6)
+                ctk.CTkButton(line, text="下载", width=56, height=26, corner_radius=8,
+                              fg_color=theme.CARD_2, hover_color=theme.CYAN, text_color=theme.CYAN,
+                              font=(theme.ui_font(), 11),
+                              command=lambda m=maj: self._download_java(m)).pack(side="right", padx=(6, 0))
+
+    def _download_java(self, maj: int) -> None:
+        self.app.set_status(f"正在获取 Java {maj}…", 0.1)
+
+        def work():
+            def p(done: int, total: int) -> None:
+                self.app.set_status(f"下载 Java {maj}", done / total if total else 0.2)
+            return javamgr.download(maj, p)
+
+        def done(folder) -> None:
+            self.app.clear_progress()
+            self.app.notify("Java 已装好", f"Java {maj} 已安装到 {folder.name}，启动对应版本会自动使用")
+            self._refresh_java()
+
+        self.app.run_async(work, done)
 
     def _pick_java(self) -> None:
         p = filedialog.askopenfilename(
