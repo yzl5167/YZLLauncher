@@ -18,7 +18,7 @@ from yzl.ui.pages import (
     ShadersPage,
     VersionsPage,
 )
-from yzl.ui.widgets import Card, attach_gradient, nav_button, tag
+from yzl.ui.widgets import Card, attach_gradient, draw_gradient, nav_button, tag
 
 W, H = 1140, 720
 NAV_W = 210
