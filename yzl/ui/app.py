@@ -7,7 +7,9 @@ from typing import Callable, Optional
 
 import customtkinter as ctk
 
+from yzl import constants
 from yzl.core.config import Config
+from yzl.core import updater
 from yzl.ui import theme
 from yzl.ui.pages import (
     AccountsPage,
@@ -57,6 +59,56 @@ class App:
         self.splash.geometry(f"520x300+{self.root.winfo_x() + (W - 520) // 2}+{self.root.winfo_y() + (H - 300) // 2}")
         self._draw_splash()
         self.splash.after(2200, self._close_splash)
+        self._check_update()
+
+    # ---------------- 自动更新 ----------------
+    def _check_update(self) -> None:
+        def work():
+            return updater.check_latest()
+
+        def done(info):
+            if info and info.get("exe_url"):
+                self._offer_update(info)
+
+        self.run_async(work, done)
+
+    def _offer_update(self, info: dict) -> None:
+        dlg = ctk.CTkToplevel(self.root)
+        dlg.title("发现新版本")
+        dlg.geometry("500x330")
+        dlg.configure(fg_color=theme.BG)
+        dlg.transient(self.root)
+        dlg.grab_set()
+        ctk.CTkLabel(dlg, text=f"发现新版本 v{info.get('version', '')}",
+                     text_color=theme.CYAN, font=(theme.ui_font(), 19, "bold")).pack(pady=(28, 6))
+        notes = (info.get("notes") or "点击更新即可在线升级到最新版。").strip()
+        ctk.CTkLabel(dlg, text=notes[:320], text_color=theme.SUB, justify="left", wraplength=440,
+                     font=(theme.ui_font(), 11)).pack(padx=28, pady=6)
+        btns = ctk.CTkFrame(dlg, fg_color="transparent")
+        btns.pack(pady=20)
+        ctk.CTkButton(btns, text="更新并重启", width=120, height=38,
+                      fg_color=theme.CYAN, hover_color=theme.GREEN, text_color="#0B101D",
+                      font=(theme.ui_font(), 13, "bold"),
+                      command=lambda: (dlg.destroy(), self._do_update(info["exe_url"]))).pack(side="left", padx=8)
+        ctk.CTkButton(btns, text="稍后", width=90, height=38,
+                      fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.SUB,
+                      font=(theme.ui_font(), 12), command=dlg.destroy).pack(side="left", padx=8)
+
+    def _do_update(self, exe_url: str) -> None:
+        def work():
+            return updater.download_update(exe_url, progress=lambda d, t: self.set_status(
+                f"下载更新 {d / t if t else '…'}", d / t if t else 0.2))
+
+        def done(path) -> None:
+            self.clear_progress()
+            self.notify("更新完成", "正在替换并重启…")
+            self.root.after(400, lambda: (updater.apply_update(path), self.root.destroy()))
+
+        def err(e) -> None:
+            self.clear_progress()
+            self.notify("更新失败", str(e))
+
+        self.run_async(work, done, err)
 
     # ---------------- 界面骨架 ----------------
     def _build_shell(self) -> None:
@@ -69,7 +121,7 @@ class App:
             font=(theme.ui_font(), 16, "bold"), anchor="w",
         ).pack(side="left", padx=(20, 6), pady=12)
         ctk.CTkLabel(
-            self.titlebar, text="Your Zone Launcher · v1.2.0", text_color=theme.SUB,
+            self.titlebar, text=f"Your Zone Launcher · v{constants.APP_VERSION}", text_color=theme.SUB,
             font=(theme.ui_font(), 11),
         ).pack(side="left", pady=12)
 
