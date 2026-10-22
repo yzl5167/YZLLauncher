@@ -58,18 +58,18 @@ jobs:
           if (-not $iscc) { Write-Error "ISCC not found"; exit 1 }
           & $iscc.FullName "YZLLauncher.iss"
           Get-ChildItem Output | Select-Object Name,Length
-      - name: 发布 Release v1.2.0
+      - name: 发布 Release v1.3.0
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -la dist 2>/dev/null || true
           ls -la Output 2>/dev/null || true
-          gh release delete v1.2.0 --yes --cleanup-tag 2>/dev/null || true
-          if [ -f "Output/YZLLauncher-Setup-1.2.0.exe" ]; then
-            gh release create v1.2.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.2.0" --notes "全版本模组中心 + 光影中心 + 微软正版登录 + 换皮肤" \
-              dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.2.0.exe"
+          gh release delete v1.3.0 --yes --cleanup-tag 2>/dev/null || true
+          if [ -f "Output/YZLLauncher-Setup-1.3.0.exe" ]; then
+            gh release create v1.3.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.0" --notes "Java 全版本自动匹配 + 模组版本目录与自动适配 + 内置在线更新" \
+              dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.3.0.exe"
           else
-            gh release create v1.2.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.2.0" --notes "全版本模组中心 + 光影中心 + 微软正版登录 + 换皮肤" \
+            gh release create v1.3.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.0" --notes "Java 全版本自动匹配 + 模组版本目录与自动适配 + 内置在线更新" \
               dist/YZLLauncher.exe
           fi
