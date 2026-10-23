@@ -602,15 +602,7 @@ class VersionsPage(Page):
             self._render_online()
             self.app.clear_progress()
 
-        def err(e: Exception) -> None:
-            self.app.clear_progress()
-            self.app.notify(
-                "获取版本清单失败",
-                "无法从镜像站拉到版本列表，通常是网络到下载源不通或太慢。\n"
-                "请检查网络后点右上角『↻ 刷新』重试；仍不行可在设置里换镜像源。\n\n" + str(e),
-            )
-
-        self.app.run_async(fn, done, err)
+        self.app.run_async(fn, done)
 
     def _render_online(self) -> None:
         if not hasattr(self, "_all") or not self._all:
@@ -760,7 +752,8 @@ class ModsPage(Page):
 
         self.list_box = ctk.CTkScrollableFrame(pad, fg_color="transparent")
         self.list_box.pack(fill="both", expand=True)
-        self._curated()
+        self._query = ""
+        self._browse_all(0)
 
     def _loader(self) -> str:
         return self.loader_menu.get().lower()
@@ -769,6 +762,7 @@ class ModsPage(Page):
         return getattr(self, "_mc_version", "") or ""
 
     def _curated(self) -> None:
+        """精选列表（点侧边「精选」进入）。"""
         for w in self.list_box.winfo_children():
             w.destroy()
         ctk.CTkLabel(
@@ -778,29 +772,55 @@ class ModsPage(Page):
         ).pack(anchor="w", padx=6, pady=(0, 6))
         for slug, title, desc in mods_core.CURATED:
             self._add_mod_card(slug, title, desc, fetch_icon=True)
+        ctk.CTkButton(
+            self.list_box, text="▶ 浏览全部模组", width=180, height=36, corner_radius=10,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
+            font=(theme.ui_font(), 12, "bold"), command=self._browse_all,
+        ).pack(pady=8)
 
     def _search(self) -> None:
-        q = self.mod_search.get().strip()
-        if not q:
-            self._curated()
-            return
-        self.app.set_status(f"正在搜索模组（{self._mc()}·{self._loader()}）…", 0.1)
+        self._query = self.mod_search.get().strip()
+        self._browse_all(0)
+
+    def _browse_all(self, offset: int = 0) -> None:
+        """浏览全部模组库（分页加载更多），像 PCL 一样。"""
+        q = getattr(self, "_query", "") or ""
+        loader = self._loader()
+        mc = self._mc()
+        if offset == 0:
+            self.app.set_status(f"正在加载模组列表（{mc}·{loader}）…", 0.1)
+        else:
+            self.app.set_status("正在加载更多模组…", 0.1)
 
         def work():
-            return mods_core.search_mods(q, self._mc(), (self._loader(),))
+            return mods_core.search_mods(q, mc, (loader,), 30, offset)
 
         def done(mods):
             self.app.clear_progress()
-            for w in self.list_box.winfo_children():
-                w.destroy()
+            if offset == 0:
+                for w in self.list_box.winfo_children():
+                    w.destroy()
             if not mods:
-                ctk.CTkLabel(self.list_box, text="没有找到适配该版本/加载器的模组（试试切换加载器）",
-                             text_color=theme.SUB, font=(theme.ui_font(), 13)).pack(pady=20)
+                if offset == 0:
+                    ctk.CTkLabel(self.list_box,
+                                 text="没有找到适配该版本/加载器的模组（试试切换加载器或搜索）",
+                                 text_color=theme.SUB, font=(theme.ui_font(), 13)).pack(pady=20)
                 return
             for m in mods:
                 self._add_mod_card(m.slug, m.title, m.description, m.icon)
+            # 每批都展示「加载更多」，可一直翻到底（Modrinth 全库）
+            ctk.CTkButton(
+                self.list_box, text="▼ 加载更多模组", width=200, height=38, corner_radius=10,
+                fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
+                font=(theme.ui_font(), 12, "bold"),
+                command=lambda o=offset + 30: self._browse_all(o),
+            ).pack(pady=8)
 
-        self.app.run_async(work, done)
+        def err(e):
+            self.app.clear_progress()
+            self.app.notify("加载失败", f"无法获取模组列表：\n{str(e)}")
+
+        self.app.run_async(work, done, err)
 
     def _add_mod_card(self, slug: str, title: str, desc: str, icon: str | None = None,
                       fetch_icon: bool = True) -> None:
@@ -863,7 +883,7 @@ class ModsPage(Page):
             ctk.CTkButton(
                 head, text="◀ 返回", width=72, height=28, corner_radius=8,
                 fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.SUB,
-                font=(theme.ui_font(), 11), command=self._curated,
+                font=(theme.ui_font(), 11), command=self._browse_all,
             ).pack(side="right")
             for f in files[:40]:
                 row = ctk.CTkFrame(self.list_box, fg_color=theme.CARD_2, corner_radius=10)
@@ -948,9 +968,11 @@ class ShadersPage(Page):
 
         self.list_box = ctk.CTkScrollableFrame(pad, fg_color="transparent")
         self.list_box.pack(fill="both", expand=True)
-        self._curated()
+        self._sh_query = ""
+        self._browse_all(0)
 
     def _curated(self) -> None:
+        """精选光影（点侧边「精选」进入）。"""
         for w in self.list_box.winfo_children():
             w.destroy()
         ctk.CTkLabel(
@@ -959,29 +981,51 @@ class ShadersPage(Page):
         ).pack(anchor="w", padx=6, pady=(0, 6))
         for slug, title, desc in sh_core.CURATED:
             self._add_card(slug, title, desc, fetch_icon=True)
+        ctk.CTkButton(
+            self.list_box, text="▶ 浏览全部光影", width=180, height=36, corner_radius=10,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
+            font=(theme.ui_font(), 12, "bold"), command=self._browse_all,
+        ).pack(pady=8)
 
     def _search(self) -> None:
-        q = self.shader_search.get().strip()
-        if not q:
-            self._curated()
-            return
-        self.app.set_status("正在搜索光影…", 0.1)
+        self._sh_query = self.shader_search.get().strip()
+        self._browse_all(0)
+
+    def _browse_all(self, offset: int = 0) -> None:
+        """浏览全部光影库（分页加载更多），像 PCL 一样。"""
+        q = getattr(self, "_sh_query", "") or ""
+        if offset == 0:
+            self.app.set_status("正在加载光影列表…", 0.1)
+        else:
+            self.app.set_status("正在加载更多光影…", 0.1)
 
         def work():
-            return sh_core.search_shaders(q)
+            return sh_core.search_shaders(q, 30, offset)
 
         def done(shaders):
             self.app.clear_progress()
-            for w in self.list_box.winfo_children():
-                w.destroy()
+            if offset == 0:
+                for w in self.list_box.winfo_children():
+                    w.destroy()
             if not shaders:
-                ctk.CTkLabel(self.list_box, text="没有找到光影包", text_color=theme.SUB,
-                             font=(theme.ui_font(), 13)).pack(pady=20)
+                if offset == 0:
+                    ctk.CTkLabel(self.list_box, text="没有找到光影包（试试换个关键词）",
+                                 text_color=theme.SUB, font=(theme.ui_font(), 13)).pack(pady=20)
                 return
             for s in shaders:
                 self._add_card(s.slug, s.title, s.description, s.icon)
+            ctk.CTkButton(
+                self.list_box, text="▼ 加载更多光影", width=200, height=38, corner_radius=10,
+                fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
+                font=(theme.ui_font(), 12, "bold"),
+                command=lambda o=offset + 30: self._browse_all(o),
+            ).pack(pady=8)
 
-        self.app.run_async(work, done)
+        def err(e):
+            self.app.clear_progress()
+            self.app.notify("加载失败", f"无法获取光影列表：\n{str(e)}")
+
+        self.app.run_async(work, done, err)
 
     def _add_card(self, slug: str, title: str, desc: str, icon: str | None = None,
                   fetch_icon: bool = True) -> None:
@@ -1042,7 +1086,7 @@ class ShadersPage(Page):
             ctk.CTkButton(
                 head, text="◀ 返回", width=72, height=28, corner_radius=8,
                 fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.SUB,
-                font=(theme.ui_font(), 11), command=self._curated,
+                font=(theme.ui_font(), 11), command=self._browse_all,
             ).pack(side="right")
             for f in files[:40]:
                 row = ctk.CTkFrame(self.list_box, fg_color=theme.CARD_2, corner_radius=10)
