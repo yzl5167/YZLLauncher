@@ -64,7 +64,7 @@ jobs:
           ls -la Output 2>/dev/null || true
           gh release delete v1.4.6 --yes --cleanup-tag 2>/dev/null || true
           if [ -f "Output/YZLLauncher-Setup-1.4.6.exe" ]; then
-            gh release create v1.4.6 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.6" --notes "v1.4.6：①设置页重新设计——『💾 保存设置』与『↻ 检查启动器更新』都固定在顶部，永远可见；②新增『JVM 参数』自定义与『自动更新』开关；③下载进度改为按已下载字节实时更新（大文件也能动），不再卡住；④版本清单多镜像自动回退、网络超时缩短，点安装版本不再长时间无反应；⑤更新下载失败会明确弹提示。" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.4.6.exe"
+            gh release create v1.4.6 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.6" --notes "v1.4.6（按代码审查+PCL思路优化）：①修复所有异步错误被吞掉（『点什么都没反应也不报错』的根因）；②离线账号 UUID 算法修正；③1.12.2 及更早版本启动修复（补 classpath、去重复 tweakClass）；④安装版改装到用户目录（不再静默失败）；⑤模组跨版本混装修复；⑥LittleSkin 登录修复；⑦下载/资源失败明确报错；⑧下载进度按字节实时更新；⑨设置页保存/检查更新按钮置顶；⑩新增 JVM 参数与自动更新开关。" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.4.6.exe"
           else
-            gh release create v1.4.6 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.6" --notes "v1.4.6：①设置页重新设计——『💾 保存设置』与『↻ 检查启动器更新』都固定在顶部，永远可见；②新增『JVM 参数』自定义与『自动更新』开关；③下载进度改为按已下载字节实时更新（大文件也能动），不再卡住；④版本清单多镜像自动回退、网络超时缩短，点安装版本不再长时间无反应；⑤更新下载失败会明确弹提示。" dist/YZLLauncher.exe
+            gh release create v1.4.6 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.6" --notes "v1.4.6（按代码审查+PCL思路优化）：①修复所有异步错误被吞掉；②离线账号 UUID 算法修正；③1.12.2 及更早版本启动修复；④安装版改装到用户目录；⑤模组跨版本混装修复；⑥LittleSkin 登录修复；⑦下载/资源失败明确报错；⑧下载进度按字节实时更新；⑨设置页按钮置顶；⑩新增 JVM 参数与自动更新开关。" dist/YZLLauncher.exe
           fi
