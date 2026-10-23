@@ -47,6 +47,68 @@ def async_set_icon(app, label: ctk.CTkLabel, url, size: int = 44, fallback_text:
     app.run_async(worker, done)
 
 
+# ---------------- 版本选择弹窗（PCL 式自定义选版本） ----------------
+class VersionPicker(ctk.CTkToplevel):
+    def __init__(self, master, app, title: str, rows: list[dict]) -> None:
+        """rows: [{version, desc, meta, size, extra, on_install}]"""
+        super().__init__(master)
+        self.app = app
+        self.title(title)
+        self.geometry("680x520")
+        self.configure(fg_color=theme.BG)
+        self.transient(master.winfo_toplevel())
+        self.grab_set()
+        self._photos = []
+
+        head = ctk.CTkFrame(self, fg_color="transparent")
+        head.pack(fill="x", padx=18, pady=(14, 10))
+        ctk.CTkLabel(head, text=title, text_color=theme.TEXT,
+                     font=(theme.ui_font(), 17, "bold")).pack(side="left")
+        ctk.CTkButton(
+            head, text="✕", width=34, height=28, corner_radius=9,
+            fg_color="transparent", hover_color=theme.RED, text_color=theme.TEXT,
+            font=(theme.ui_font(), 13), command=self.destroy,
+        ).pack(side="right")
+
+        box = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        box.pack(fill="both", expand=True, padx=12, pady=(0, 14))
+        if not rows:
+            ctk.CTkLabel(box, text="没有可用的版本", text_color=theme.SUB,
+                         font=(theme.ui_font(), 13)).pack(pady=30)
+        for r in rows:
+            row = ctk.CTkFrame(box, fg_color=theme.CARD_2, corner_radius=10)
+            row.pack(fill="x", pady=3)
+            left = ctk.CTkFrame(row, fg_color="transparent")
+            left.pack(side="left", fill="x", expand=True, padx=12, pady=8)
+            ctk.CTkLabel(left, text=r["version"], text_color=theme.TEXT, anchor="w",
+                         font=(theme.ui_font(), 13, "bold")).pack(anchor="w")
+            meta = r.get("meta") or ""
+            extra = r.get("extra") or ""
+            sub = f"{meta}　{extra}"
+            if sub.strip():
+                ctk.CTkLabel(left, text=sub, text_color=theme.SUB, anchor="w",
+                             font=(theme.ui_font(), 10)).pack(anchor="w", pady=(2, 0))
+            right = ctk.CTkFrame(row, fg_color="transparent")
+            right.pack(side="right", padx=(4, 10))
+            if r.get("badge"):
+                tag(right, r["badge"], color=theme.GREEN).pack(side="left", padx=4)
+            size = r.get("size")
+            if size:
+                ctk.CTkLabel(right, text=f"{size / 1048576:.1f}MB", text_color=theme.SUB,
+                             font=(theme.ui_font(), 10)).pack(side="left", padx=8)
+            ctk.CTkButton(
+                right, text="安装", width=64, height=28, corner_radius=9,
+                fg_color=theme.CARD_2, hover_color=theme.GREEN, text_color=theme.GREEN,
+                font=(theme.ui_font(), 11),
+                command=lambda f=r["on_install"], w=row: self._do(f, w),
+            ).pack(side="left")
+
+    def _do(self, fn, widget) -> None:
+        widget.configure(fg_color="#1E3A2F")
+        self.app.run_async(fn)
+
+
+
 # ================= 首页 =================
 class HomePage(Page):
     def on_show(self) -> None:
@@ -124,12 +186,23 @@ class HomePage(Page):
             font=(theme.ui_font(), 12),
         )
         self.detail.pack(anchor="w", padx=20, pady=4)
+        self.java_status = ctk.CTkLabel(
+            right, text="", text_color=theme.GREEN, justify="left", anchor="w",
+            font=(theme.ui_font(), 12),
+        )
+        self.java_status.pack(anchor="w", padx=20, pady=(6, 4))
+        self.java_dl_btn = ctk.CTkButton(
+            right, text="⬇ 下载所需 Java", width=180, height=34, corner_radius=10,
+            fg_color=theme.CARD_2, hover_color=theme.CYAN, text_color=theme.CYAN,
+            font=(theme.ui_font(), 12), command=self._dl_needed_java,
+        )
+        self.java_dl_btn.pack(anchor="w", padx=20, pady=(0, 6))
         ctk.CTkLabel(
-            right, text="提示：1.21 及以上需要 Java 21；\n生电请优先安装 Fabric + Carpet。",
+            right, text="提示：1.21+ 需要 Java 21；新版（25.x/26.x）需要 Java 25；\n生电请优先安装 Fabric + Carpet。",
             text_color=theme.SUB, justify="left", anchor="w",
             font=(theme.ui_font(), 11), fg_color=theme.CARD_2, corner_radius=10,
             padx=12, pady=10,
-        ).pack(anchor="w", padx=20, pady=(18, 12))
+        ).pack(anchor="w", padx=20, pady=(12, 12))
 
         self._refresh()
 
@@ -171,8 +244,47 @@ class HomePage(Page):
                      f"Java　　{'{0}'.format(jv)}\n"
                      f"内存　　{int(self.app.cfg.get('memory_mb'))} MB",
             )
+            self._update_java_status(parent)
         except Exception:
             self.detail.configure(text="版本信息读取失败")
+
+    def _update_java_status(self, parent_id: str) -> None:
+        """首页显示当前版本所需 Java 的就绪状态，并提供一键下载。"""
+        try:
+            gd = self.app.cfg.game_dir()
+            need = javamgr.required_java(parent_id, gd)
+            self._java_need = need
+            if javamgr.list_installed().get(need):
+                self.java_status.configure(text=f"所需 Java {need} ✓ 已就绪", text_color=theme.GREEN)
+                self.java_dl_btn.pack_forget()
+            else:
+                self.java_status.configure(text=f"缺少 Java {need}（点下方按钮自动下载）", text_color=theme.AMBER)
+                self.java_dl_btn.pack(anchor="w", padx=20, pady=(0, 6))
+        except Exception:
+            self.java_status.configure(text="", text_color=theme.SUB)
+            self.java_dl_btn.pack_forget()
+
+    def _dl_needed_java(self) -> None:
+        need = getattr(self, "_java_need", None)
+        if not need:
+            self.app.notify("无需下载", "当前版本所需 Java 已就绪")
+            return
+        self.app.set_status(f"正在下载 Java {need}…", 0.05)
+
+        def work():
+            return javamgr.download(need, progress=lambda d, t: self.app.set_status(
+                f"正在下载 Java {need} {int(d / t * 100) if t else 0}%", d / t if t else 0.05))
+
+        def done(folder):
+            self.app.clear_progress()
+            self.app.show_success("Java 已装好", f"Java {need} 已就绪，现在可以点「启动游戏」了")
+            self._refresh()
+
+        def err(e):
+            self.app.clear_progress()
+            self.app.show_error("Java 下载失败", f"Java {need} 下载失败：\n{str(e)}")
+
+        self.app.run_async(work, done, err)
 
     def _launch(self) -> None:
         cfg = self.app.cfg
@@ -201,14 +313,15 @@ class HomePage(Page):
             parent_id = (vc.resolve_version(cfg.game_dir(), vid) or {}).get("inheritsFrom") or vid
         except Exception:
             pass
-        jpath = lc.find_java(cfg.get("java_path") or "", mc_version=parent_id)
+        gd = cfg.game_dir()
+        jpath = lc.find_java(cfg.get("java_path") or "", mc_version=parent_id, game_dir=gd)
         if not jpath:
-            need = javamgr.required_java(parent_id)
+            need = javamgr.required_java(parent_id, gd)
             self.app.set_status(f"正在自动下载 Java {need}（{parent_id} 需要）…", 0.05)
 
             def work():
                 return javamgr.ensure(
-                    parent_id, auto_download=True,
+                    parent_id, auto_download=True, game_dir=gd,
                     progress=lambda d, t: self.app.set_status(
                         f"正在下载 Java {need} {int(d / t * 100) if t else 0}%", d / t if t else 0.05))
 
@@ -1176,7 +1289,7 @@ class SettingsPage(Page):
         jtop.pack(fill="x", padx=14, pady=(10, 6))
         ctk.CTkLabel(jtop, text="内置 Java 版本", text_color=theme.TEXT,
                      font=(theme.ui_font(), 13, "bold")).pack(side="left")
-        ctk.CTkLabel(jtop, text="自动按游戏版本选择（1.16↔8 · 1.17-1.20.4↔17 · 1.20.5+↔21）",
+        ctk.CTkLabel(jtop, text="自动按游戏版本选择（1.16↔8 · 1.17-1.20.4↔17 · 1.20.5+↔21 · 新版25.x/26.x↔25）",
                      text_color=theme.SUB, font=(theme.ui_font(), 10)).pack(side="left", padx=10)
         ctk.CTkButton(jtop, text="刷新", width=60, height=28, corner_radius=9,
                       fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
@@ -1232,7 +1345,12 @@ class SettingsPage(Page):
             fg_color=theme.CARD_2, hover_color=theme.CYAN, text_color=theme.CYAN,
             font=(theme.ui_font(), 14, "bold"), command=self._save,
         ).pack(side="left")
-        ctk.CTkLabel(btns, text="提示：1.21 版本需要 Java 21；自动检测会优先使用已安装的 JDK。",
+        ctk.CTkButton(
+            btns, text="↻ 检查启动器更新", width=140, height=40, corner_radius=12,
+            fg_color=theme.CARD_2, hover_color=theme.GREEN, text_color=theme.GREEN,
+            font=(theme.ui_font(), 13, "bold"), command=self.app.check_update_manual,
+        ).pack(side="left", padx=(10, 0))
+        ctk.CTkLabel(btns, text="自动按版本选 Java（1.16↔8·1.17-1.20.4↔17·1.20.5+↔21·新版25.x↔25）",
                      text_color=theme.SUB, font=(theme.ui_font(), 11)).pack(side="left", padx=16)
 
     def _refresh_java(self) -> None:
