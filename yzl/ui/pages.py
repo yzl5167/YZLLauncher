@@ -35,19 +35,28 @@ class Page(ctk.CTkFrame):
 
 
 # ---------------- 图标异步加载 ----------------
-def async_set_icon(app, label: ctk.CTkLabel, url, size: int = 44, fallback_text: str = "◈") -> None:
-    """后台下载图标并更新 label（无图标时显示占位字符）。"""
+def async_set_icon(app, label: ctk.CTkLabel, url, size: int = 44,
+                   fallback_text: str = "◈", _tries: int = 3) -> None:
+    """后台下载图标并更新 label；下载失败（如网络抖动/慢）会自动重试，最多 3 次。"""
 
     def worker():
-        return url
+        return load_icon_photo(url, size) if url else None
 
-    def done(u):
-        img = load_icon_photo(u, size) if u else None
+    def done(img):
         if img:
-            label.configure(text="", image=img)
-            label._img = img  # 持有引用防 GC
+            try:
+                label.configure(text="", image=img)
+                label._img = img  # 持有引用防 GC
+            except Exception:
+                pass
+        elif _tries > 1:
+            app.root.after(1200, lambda: async_set_icon(
+                app, label, url, size, fallback_text, _tries - 1))
         else:
-            label.configure(text=fallback_text)
+            try:
+                label.configure(text=fallback_text)
+            except Exception:
+                pass
 
     app.run_async(worker, done)
 
@@ -166,8 +175,9 @@ class HomePage(Page):
                      font=(theme.ui_font(), 11)).pack(anchor="w", padx=22, pady=(0, 16))
 
         self.launch_btn = GradientButton(
-            left, text="启 动 游 戏", command=self._launch,
-            width=300, height=64, corner=22, font_size=20,
+            left, text="▶  启 动 游 戏", command=self._launch,
+            width=330, height=70, corner=6,
+            c1=theme.CARD_2, c2=theme.CARD_2, font_size=21,
         )
         self.launch_btn.pack(anchor="w", padx=22, pady=8)
 
@@ -688,7 +698,7 @@ class ModsPage(Page):
             text_color=theme.SUB, font=(theme.ui_font(), 11),
         ).pack(anchor="w", padx=6, pady=(0, 6))
         for slug, title, desc in mods_core.CURATED:
-            self._add_mod_card(slug, title, desc, fetch_icon=False)
+            self._add_mod_card(slug, title, desc, fetch_icon=True)
 
     def _search(self) -> None:
         q = self.mod_search.get().strip()
@@ -869,7 +879,7 @@ class ShadersPage(Page):
             text_color=theme.SUB, font=(theme.ui_font(), 11),
         ).pack(anchor="w", padx=6, pady=(0, 6))
         for slug, title, desc in sh_core.CURATED:
-            self._add_card(slug, title, desc, fetch_icon=False)
+            self._add_card(slug, title, desc, fetch_icon=True)
 
     def _search(self) -> None:
         q = self.shader_search.get().strip()
@@ -1001,10 +1011,43 @@ class AccountsPage(Page):
     def on_show(self) -> None:
         for w in self.winfo_children():
             w.destroy()
-        pad = ctk.CTkFrame(self, fg_color="transparent")
+        pad = ctk.CTkScrollableFrame(self, fg_color="transparent")
         pad.pack(fill="both", expand=True, padx=24, pady=18)
         ctk.CTkLabel(pad, text="账户管理", text_color=theme.TEXT,
                      font=(theme.ui_font(), 20, "bold")).pack(anchor="w", pady=(0, 16))
+
+        # ---- 换皮肤 ----
+        sk_card = Card(pad, width=560, corner_radius=18)
+        sk_card.pack(anchor="w", pady=(0, 14))
+        sk_card.pack_propagate(False)
+        ctk.CTkLabel(sk_card, text="换皮肤", text_color=theme.TEXT,
+                     font=(theme.ui_font(), 15, "bold")).pack(anchor="w", padx=18, pady=(16, 8))
+        ctk.CTkLabel(sk_card, text="正版账号：直接上传到 Mojang 官方；离线账号：保存为本地皮肤。",
+                     text_color=theme.SUB, font=(theme.ui_font(), 11), justify="left").pack(anchor="w", padx=18, pady=(0, 10))
+        sk_row = ctk.CTkFrame(sk_card, fg_color="transparent")
+        sk_row.pack(fill="x", padx=18, pady=(0, 14))
+        self.skin_variant = ctk.CTkSegmentedButton(
+            sk_row, values=["经典(Steve)", "细长(Alex)"], height=34, corner_radius=10,
+            fg_color=theme.CARD_2, selected_color=theme.BORDER, selected_hover_color=theme.BORDER,
+            text_color=theme.SUB, font=(theme.ui_font(), 12),
+        )
+        self.skin_variant.set("经典(Steve)")
+        self.skin_variant.pack(side="left", padx=(0, 10))
+        ctk.CTkButton(
+            sk_row, text="选择皮肤图片…", width=130, height=36, corner_radius=10,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
+            font=(theme.ui_font(), 12), command=self._pick_skin,
+        ).pack(side="left", padx=(0, 10))
+        self.skin_apply = ctk.CTkButton(
+            sk_row, text="上传/应用", width=96, height=36, corner_radius=10,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.GREEN,
+            font=(theme.ui_font(), 12), command=self._apply_skin,
+        )
+        self.skin_apply.pack(side="left")
+        self.skin_label = ctk.CTkLabel(sk_row, text="", text_color=theme.SUB,
+                                       font=(theme.ui_font(), 10))
+        self.skin_label.pack(side="left", padx=10)
+        self._skin_path: str | None = None
 
         # ---- 微软正版登录 ----
         ms_card = Card(pad, corner_radius=18)
@@ -1066,39 +1109,6 @@ class AccountsPage(Page):
             fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
             font=(theme.ui_font(), 13), command=self._add,
         ).pack(side="left", padx=(10, 0))
-
-        # ---- 换皮肤 ----
-        sk_card = Card(pad, width=560, corner_radius=18)
-        sk_card.pack(anchor="w", pady=(14, 0))
-        sk_card.pack_propagate(False)
-        ctk.CTkLabel(sk_card, text="换皮肤", text_color=theme.TEXT,
-                     font=(theme.ui_font(), 15, "bold")).pack(anchor="w", padx=18, pady=(16, 8))
-        ctk.CTkLabel(sk_card, text="正版账号：直接上传到 Mojang 官方；离线账号：保存为本地皮肤。",
-                     text_color=theme.SUB, font=(theme.ui_font(), 11), justify="left").pack(anchor="w", padx=18, pady=(0, 10))
-        sk_row = ctk.CTkFrame(sk_card, fg_color="transparent")
-        sk_row.pack(fill="x", padx=18, pady=(0, 14))
-        self.skin_variant = ctk.CTkSegmentedButton(
-            sk_row, values=["经典(Steve)", "细长(Alex)"], height=34, corner_radius=10,
-            fg_color=theme.CARD_2, selected_color=theme.BORDER, selected_hover_color=theme.BORDER,
-            text_color=theme.SUB, font=(theme.ui_font(), 12),
-        )
-        self.skin_variant.set("经典(Steve)")
-        self.skin_variant.pack(side="left", padx=(0, 10))
-        ctk.CTkButton(
-            sk_row, text="选择皮肤图片…", width=130, height=36, corner_radius=10,
-            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
-            font=(theme.ui_font(), 12), command=self._pick_skin,
-        ).pack(side="left", padx=(0, 10))
-        self.skin_apply = ctk.CTkButton(
-            sk_row, text="上传/应用", width=96, height=36, corner_radius=10,
-            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.GREEN,
-            font=(theme.ui_font(), 12), command=self._apply_skin,
-        )
-        self.skin_apply.pack(side="left")
-        self.skin_label = ctk.CTkLabel(sk_row, text="", text_color=theme.SUB,
-                                       font=(theme.ui_font(), 10))
-        self.skin_label.pack(side="left", padx=10)
-        self._skin_path: str | None = None
 
         # ---- 已保存账户 ----
         ctk.CTkLabel(pad, text="已保存账户", text_color=theme.TEXT,
