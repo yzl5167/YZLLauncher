@@ -548,6 +548,9 @@ class InstalledPage(Page):
 
 # ================= 版本管理 =================
 class VersionsPage(Page):
+    def on_reshow(self) -> None:
+        self._render_online()
+
     def on_show(self) -> None:
         for w in self.winfo_children():
             w.destroy()
@@ -556,7 +559,7 @@ class VersionsPage(Page):
 
         head = ctk.CTkFrame(pad, fg_color="transparent")
         head.pack(fill="x", pady=(0, 14))
-        ctk.CTkLabel(head, text="版本管理", text_color=theme.TEXT,
+        ctk.CTkLabel(head, text="版本下载", text_color=theme.TEXT,
                      font=(theme.ui_font(), 20, "bold")).pack(side="left")
         ctk.CTkButton(
             head, text="↻ 刷新", width=90, height=34, corner_radius=12,
@@ -564,24 +567,11 @@ class VersionsPage(Page):
             font=(theme.ui_font(), 12), command=self._load_all,
         ).pack(side="right")
 
-        body = ctk.CTkFrame(pad, fg_color="transparent")
-        body.pack(fill="both", expand=True)
-
-        # 已安装
-        left = Card(body, width=300, corner_radius=18)
-        left.pack(side="left", fill="y", padx=(0, 14))
-        left.pack_propagate(False)
-        ctk.CTkLabel(left, text="已安装", text_color=theme.TEXT,
-                     font=(theme.ui_font(), 15, "bold")).pack(anchor="w", padx=16, pady=(14, 8))
-        self.local_box = ctk.CTkScrollableFrame(left, fg_color="transparent")
-        self.local_box.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-
-        # 在线版本
-        right = Card(body, corner_radius=18)
-        right.pack(side="right", fill="both", expand=True)
-        top = ctk.CTkFrame(right, fg_color="transparent")
+        card = Card(pad, corner_radius=18)
+        card.pack(fill="both", expand=True)
+        top = ctk.CTkFrame(card, fg_color="transparent")
         top.pack(fill="x", padx=16, pady=(14, 8))
-        ctk.CTkLabel(top, text="在线版本（全部 Java 版历史版本）", text_color=theme.TEXT,
+        ctk.CTkLabel(top, text="在线版本（全部 Java 版历史版本，每行可选加载器一键安装）", text_color=theme.TEXT,
                      font=(theme.ui_font(), 15, "bold")).pack(side="left")
         self.filter = ctk.CTkSegmentedButton(
             top, values=["全部", "正式版", "快照", "远古"], height=30, corner_radius=10,
@@ -590,47 +580,16 @@ class VersionsPage(Page):
         )
         self.filter.pack(side="right")
         self.search = ctk.CTkEntry(
-            right, placeholder_text="搜索版本号…", height=34, corner_radius=10,
+            card, placeholder_text="搜索版本号…", height=34, corner_radius=10,
             fg_color=theme.CARD_2, border_color=theme.BORDER, text_color=theme.TEXT,
             font=(theme.ui_font(), 12),
         )
         self.search.pack(fill="x", padx=16, pady=(0, 8))
         self.search.bind("<KeyRelease>", lambda e: self._render_online())
-        self.online_box = ctk.CTkScrollableFrame(right, fg_color="transparent")
+        self.online_box = ctk.CTkScrollableFrame(card, fg_color="transparent")
         self.online_box.pack(fill="both", expand=True, padx=10, pady=(0, 8))
-
-        self._load_local()
+        self._sel_loader: dict[str, str] = {}
         self._load_all()
-
-    def _load_local(self) -> None:
-        for w in self.local_box.winfo_children():
-            w.destroy()
-        for vid in sorted(vc.list_local_versions(self.app.cfg.game_dir()), key=str.lower):
-            row = ctk.CTkFrame(self.local_box, fg_color=theme.CARD_2, corner_radius=10)
-            row.pack(fill="x", pady=3)
-            ctk.CTkLabel(row, text=vid, text_color=theme.TEXT, anchor="w",
-                         font=(theme.ui_font(), 12)).pack(side="left", padx=10, pady=8)
-            ctk.CTkButton(
-                row, text="启动", width=52, height=26, corner_radius=8,
-                fg_color=theme.CARD_2, hover_color=theme.BORDER,
-                text_color=theme.CYAN, font=(theme.ui_font(), 11),
-                command=lambda v=vid: self._launch_version(v),
-            ).pack(side="right", padx=(2, 8), pady=6)
-            ctk.CTkButton(
-                row, text="删", width=34, height=26, corner_radius=8,
-                fg_color=theme.CARD_2, hover_color=theme.BORDER,
-                text_color=theme.SUB, font=(theme.ui_font(), 11),
-                command=lambda v=vid: self._delete_version(v),
-            ).pack(side="right", pady=6)
-
-    def _launch_version(self, vid: str) -> None:
-        self.app.cfg.set("current_version", vid)
-        self.app.switch("home")
-
-    def _delete_version(self, vid: str) -> None:
-        import shutil
-        shutil.rmtree(vc.versions_dir(self.app.cfg.game_dir()) / vid, ignore_errors=True)
-        self._load_local()
 
     def _load_all(self) -> None:
         self.app.set_status("正在获取版本清单…", 0.05)
@@ -682,36 +641,49 @@ class VersionsPage(Page):
                 tag(row, "已安装", color=theme.GREEN).pack(side="right", padx=8)
             else:
                 ctk.CTkButton(
-                    row, text="安装", width=54, height=26, corner_radius=8,
+                    row, text="安装", width=58, height=28, corner_radius=8,
                     fg_color=theme.CARD_2, hover_color=theme.BORDER,
                     text_color=theme.CYAN, font=(theme.ui_font(), 11),
-                    command=lambda v=vid: self._install_version(v, fabric=False),
-                ).pack(side="right", padx=(2, 8), pady=6)
-                ctk.CTkButton(
-                    row, text="装Fabric", width=70, height=26, corner_radius=8,
-                    fg_color=theme.CARD_2, hover_color=theme.BORDER,
-                    text_color=theme.VIOLET, font=(theme.ui_font(), 11),
-                    command=lambda v=vid: self._install_version(v, fabric=True),
-                ).pack(side="right", pady=6)
+                    command=lambda v=vid: self._install_version(
+                        v, self._sel_loader.get(v, "原版")),
+                ).pack(side="right", padx=(6, 8), pady=6)
+                menu = ctk.CTkOptionMenu(
+                    row, values=["原版", "Fabric", "Quilt", "NeoForge", "Forge"],
+                    width=104, height=28, corner_radius=8,
+                    fg_color=theme.CARD_2, button_color=theme.CARD_2,
+                    button_hover_color=theme.BORDER, text_color=theme.TEXT,
+                    dropdown_fg_color=theme.CARD_2, dropdown_hover_color=theme.BORDER,
+                    font=(theme.ui_font(), 11), dropdown_font=(theme.ui_font(), 11),
+                    command=lambda val, v=vid: self._sel_loader.update({v: val}),
+                )
+                menu.set("原版")
+                menu.pack(side="right", pady=6)
 
-    def _install_version(self, vid: str, fabric: bool) -> None:
+    def _install_version(self, vid: str, loader: str) -> None:
         cfg = self.app.cfg
+        self.app.set_status(f"正在安装 {vid}（{loader}）…", 0.05)
 
         def progress(stage: str, done: int, total: int) -> None:
             self.app.set_status(f"正在安装 {vid} · {stage} {done}%", done / 100)
 
         def work():
-            vc.install_version(cfg.game_dir(), vid, cfg.get("mirror"), progress)
-            if fabric:
-                vc.install_fabric(cfg.game_dir(), vid, cfg.get("mirror"), progress)
+            java = None
+            if loader not in ("原版", "vanilla", ""):
+                parent = (vc.resolve_version(cfg.game_dir(), vid) or {}).get("inheritsFrom") or vid
+                java = lc.find_java(cfg.get("java_path") or "", mc_version=parent,
+                                    game_dir=cfg.game_dir())
+            vc.install_loader(cfg.game_dir(), vid, loader, cfg.get("mirror"), progress, java)
 
         def done(_):
             self.app.clear_progress()
-            self.app.show_success("安装完成", f"版本 {vid} 已安装成功" + ("（含 Fabric）" if fabric else ""))
-            self._load_local()
+            self.app.show_success("安装完成", f"版本 {vid}（{loader}）已安装成功")
             self._render_online()
 
-        self.app.run_async(work, done)
+        def err(e):
+            self.app.clear_progress()
+            self.app.show_error("安装失败", f"{vid}（{loader}）安装失败：\n{str(e)}")
+
+        self.app.run_async(work, done, err)
 
 
 # ================= 模组中心 =================
