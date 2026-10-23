@@ -1531,7 +1531,9 @@ class SettingsPage(Page):
             font=(theme.ui_font(), 12, "bold"), command=self.app.check_update_manual,
         ).pack(side="right")
 
-        card = Card(pad, width=640, corner_radius=18)
+        scroll = ctk.CTkScrollableFrame(pad, width=680, fg_color="transparent", corner_radius=0)
+        scroll.pack(fill="both", expand=True, anchor="w")
+        card = Card(scroll, width=640, corner_radius=18)
         card.pack(anchor="w")
         card.pack_propagate(False)
         inner = ctk.CTkFrame(card, fg_color="transparent")
@@ -1645,7 +1647,7 @@ class SettingsPage(Page):
         self.th_slider.set(cfg.get("download_threads"))
         self.th_slider.pack(side="right", padx=(0, 16))
 
-        btns = ctk.CTkFrame(pad, fg_color="transparent")
+        btns = ctk.CTkFrame(scroll, fg_color="transparent")
         btns.pack(anchor="w", pady=(18, 0))
         ctk.CTkButton(
             btns, text="💾 保存设置", width=140, height=40, corner_radius=12,
