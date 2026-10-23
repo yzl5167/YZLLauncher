@@ -288,14 +288,22 @@ def install_version(
         total = len(tasks)
         if progress:
             progress("资源文件", base, 100)
-        done = 0
-        for urls, dest, h, size in tasks:
-            if cancel and cancel():
-                return
-            net.download_with_fallback(urls, dest, h, size)
-            done += 1
-            if progress:
-                progress("资源文件", base + int(P_ASSETS * (done / total if total else 0)), 100)
+        # 资源对象多是千级小文件，串行极慢 → 并发下载提速
+        if total >= 4:
+            net.ParallelDownloader(_threads()).run(
+                tasks,
+                lambda st, d, t: progress(
+                    "资源文件", base + int(P_ASSETS * (d / t if t else 0)), 100),
+            )
+        else:
+            done = 0
+            for urls, dest, h, size in tasks:
+                if cancel and cancel():
+                    return
+                net.download_with_fallback(urls, dest, h, size)
+                done += 1
+                if progress:
+                    progress("资源文件", base + int(P_ASSETS * (done / total if total else 0)), 100)
     if progress:
         progress("完成", 100, 100)
 
@@ -345,14 +353,31 @@ def ensure_assets(
     total = len(tasks)
     if total == 0:
         return
-    done = 0
-    for urls, dest, h, size in tasks:
-        if cancel and cancel():
-            raise NetError("资源下载已取消")
-        net.download_with_fallback(urls, dest, h, size)
-        done += 1
-        if progress:
-            progress(done, total)
+    # 并发补全资源对象（多为千级小文件，并发明显提速）
+    if total >= 4:
+        net.ParallelDownloader(_threads()).run(
+            tasks,
+            lambda st, d, t: progress(d, t) if progress else None,
+        )
+    else:
+        done = 0
+        for urls, dest, h, size in tasks:
+            if cancel and cancel():
+                raise NetError("资源下载已取消")
+            net.download_with_fallback(urls, dest, h, size)
+            done += 1
+            if progress:
+                progress(done, total)
+
+
+def _threads(default: int = 12) -> int:
+    """读取配置的下载线程数（默认 12），限制在合理范围，用于并发下载提速。"""
+    try:
+        cfg = json.loads((app_root() / "config.json").read_text(encoding="utf-8"))
+        t = int(cfg.get("download_threads") or default)
+    except Exception:
+        t = default
+    return max(4, min(24, t))
 
 
 class ParallelPool:
@@ -368,7 +393,7 @@ class ParallelPool:
             return
         n = len(tasks)
         if n >= 6:
-            d = net.ParallelDownloader(8)
+            d = net.ParallelDownloader(_threads())
             if progress:
                 d.run(tasks, lambda st, done, total: progress(
                     "库文件", base + int(span * (done / total if total else 0)), 100))
