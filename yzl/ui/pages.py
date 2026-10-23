@@ -288,6 +288,24 @@ class HomePage(Page):
 
     def _launch(self) -> None:
         cfg = self.app.cfg
+        try:
+            self._launch_inner(cfg)
+        except Exception as e:  # noqa: BLE001 - 保证任何启动错误都不静默
+            import traceback
+            self._log_error("".join(traceback.format_exc()))
+            self.app.clear_progress()
+            self.app.show_error("启动异常", f"{str(e)}\n\n详情已写入 yzl_error.log")
+
+    def _log_error(self, tb: str) -> None:
+        try:
+            import datetime
+            from yzl.constants import app_root
+            with open(app_root() / "yzl_error.log", "a", encoding="utf-8") as f:
+                f.write(f"\n===== {datetime.datetime.now()} =====\n{tb}\n")
+        except Exception:
+            pass
+
+    def _launch_inner(self, cfg) -> None:
         if self.app._launching:
             self.app.notify("已在运行", "游戏进程正在运行中")
             return
@@ -341,7 +359,9 @@ class HomePage(Page):
         self.app.set_status(f"正在准备启动 {vid}…", 0.85)
         try:
             spec = lc.build_launch_spec(cfg, vid, acc)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+            import traceback
+            self._log_error(f"[build_launch_spec] {vid}: {e}\n{traceback.format_exc()}")
             self.app.clear_progress()
             self.app.show_error("无法启动", f"{vid} 启动失败：\n{str(e)}")
             return
@@ -350,7 +370,9 @@ class HomePage(Page):
         self.app.clear_log()
         self.app.add_log(f"[YZL] 启动版本 {vid} · 内存 {cfg.get('memory_mb')}MB")
         self.app.add_log(f"[YZL] 游戏目录 {cfg.game_dir()}")
-        self.app.add_log(f"[YZL] 启动命令:\n  {' '.join(spec.cmd[:24])} ...")
+        self.app.add_log("[YZL] 启动命令:")
+        for part in spec.cmd:
+            self.app.add_log(f"  {part}")
         self.app.set_status("正在启动游戏…", 0.98)
 
         def on_exit(rc: int) -> None:
@@ -363,6 +385,8 @@ class HomePage(Page):
             self.app._proc = proc
             self.app.set_status("游戏运行中…", 1.0)
         except Exception as e:  # noqa: BLE001
+            import traceback
+            self._log_error(f"[launch] {vid}: {e}\n{traceback.format_exc()}")
             self.app._launching = False
             self.app.clear_progress()
             self.app.show_error("启动失败", str(e))
