@@ -83,6 +83,21 @@ def get_json(url: str, timeout: int = 30, tries: int = 3) -> dict:
     raise NetError(f"请求失败: {url} ({last})")
 
 
+def http_text(url: str, timeout: int = 30, tries: int = 3) -> str:
+    """获取纯文本内容（如静态版本号文件）；失败抛 NetError。"""
+    last: Optional[Exception] = None
+    for i in range(tries):
+        try:
+            r = _session().get(url, timeout=timeout)
+            r.raise_for_status()
+            return r.text
+        except Exception as e:  # noqa: BLE001
+            last = e
+            if i == tries - 1:
+                break
+    raise NetError(f"请求失败: {url} ({last})")
+
+
 def _sha1(path: Path) -> str:
     h = hashlib.sha1()
     with open(path, "rb") as f:

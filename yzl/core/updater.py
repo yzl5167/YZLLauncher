@@ -20,21 +20,37 @@ def _parse(v: str) -> tuple:
 
 def check_latest(owner: str = OWNER, repo: str = REPO) -> Optional[dict]:
     """查询最新 Release；若高于当前版本则返回更新信息，否则返回 None。
-    网络/接口失败时抛 NetError（由调用方区分『连不上』与『已最新』），
-    不再静默当作已最新，避免国内访问 GitHub API 失败时误导用户以为没有更新。"""
-    data = net.get_json(
-        f"https://api.github.com/repos/{owner}/{repo}/releases/latest",
-        timeout=25, tries=4)
-    tag = str(data.get("tag_name", "")).lstrip("v")
-    if not tag or _parse(tag) <= _parse(APP_VERSION):
+    优先读仓库根 latest_version.txt（静态文件，不触发 GitHub API 限流，国内更稳）；
+    读不到再回退 GitHub API。两者都失败抛 NetError（由调用方区分『连不上』与『已最新』）。"""
+    tag: Optional[str] = None
+    html_url = ""
+    # 1) 优先：静态版本号文件（raw，无 API 限流）
+    try:
+        txt = net.http_text(
+            f"https://raw.githubusercontent.com/{owner}/{repo}/main/latest_version.txt",
+            timeout=15, tries=3)
+        _t = (txt or "").strip().lower().lstrip("v")
+        if _t and re.fullmatch(r"[\d.]+", _t):
+            tag = _t
+    except Exception:
+        tag = None
+    # 2) 回退：GitHub API latest release
+    if not tag:
+        data = net.get_json(
+            f"https://api.github.com/repos/{owner}/{repo}/releases/latest",
+            timeout=20, tries=3)
+        tag = str(data.get("tag_name", "")).lstrip("v")
+        html_url = data.get("html_url") or ""
+    if not tag:
+        raise net.NetError("无法连接更新服务器（GitHub 在国内可能需要加速器）")
+    if _parse(tag) <= _parse(APP_VERSION):
         return None
-    exe_url = None
-    for a in data.get("assets", []):
-        if a.get("name") == "YZLLauncher.exe":
-            exe_url = a.get("browser_download_url")
-            break
-    return {"version": tag, "exe_url": exe_url, "notes": data.get("body") or "",
-            "html_url": data.get("html_url") or ""}
+    return {
+        "version": tag,
+        "exe_url": f"https://github.com/{owner}/{repo}/releases/download/v{tag}/YZLLauncher.exe",
+        "notes": "",
+        "html_url": html_url or f"https://github.com/{owner}/{repo}/releases/tag/v{tag}",
+    }
 
 
 def download_update(exe_url: str, progress: Optional[Callable[[int, int], None]] = None) -> Path:
