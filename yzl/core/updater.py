@@ -19,11 +19,12 @@ def _parse(v: str) -> tuple:
 
 
 def check_latest(owner: str = OWNER, repo: str = REPO) -> Optional[dict]:
-    """查询最新 Release；若高于当前版本则返回更新信息，否则返回 None。"""
-    try:
-        data = net.get_json(f"https://api.github.com/repos/{owner}/{repo}/releases/latest", timeout=20)
-    except Exception:
-        return None
+    """查询最新 Release；若高于当前版本则返回更新信息，否则返回 None。
+    网络/接口失败时抛 NetError（由调用方区分『连不上』与『已最新』），
+    不再静默当作已最新，避免国内访问 GitHub API 失败时误导用户以为没有更新。"""
+    data = net.get_json(
+        f"https://api.github.com/repos/{owner}/{repo}/releases/latest",
+        timeout=25, tries=4)
     tag = str(data.get("tag_name", "")).lstrip("v")
     if not tag or _parse(tag) <= _parse(APP_VERSION):
         return None
