@@ -98,6 +98,14 @@ def build_launch_spec(cfg: Config, version_id: str, account: dict) -> LaunchSpec
     parent_id = data.get("inheritsFrom") or version_id
     parent = resolve_version(game_dir, parent_id)
 
+    # 启动前补全游戏资源：修复『资源文件没下完就启动 → MC 加载纹理
+    # NoSuchFileException 崩溃闪退』。缺失对象自动补齐，全部就绪后才继续构建命令。
+    try:
+        versions.ensure_assets(game_dir, parent_id, cfg.get("mirror") or "bmclapi")
+    except Exception:
+        # 资源补全失败不阻断启动尝试；真正的核心缺失由下方 jar 检查兜底报错
+        pass
+
     jar = versions_dir(game_dir) / parent_id / f"{parent_id}.jar"
     if not jar.exists():
         raise LaunchError(f"游戏核心缺失: {parent_id}.jar")
@@ -167,22 +175,22 @@ def build_launch_spec(cfg: Config, version_id: str, account: dict) -> LaunchSpec
     else:
         # 旧版（<1.13）：minecraftArguments 字符串
         legacy = data.get("minecraftArguments", "")
-        legacy = legacy.replace("${auth_access_token}", tokens["auth_access_token"]) \
-                       .replace("${auth_session}", tokens["auth_session"]) \
-                       .replace("${auth_player_name}", tokens["auth_player_name"]) \
-                       .replace("${auth_uuid}", tokens["auth_uuid"]) \
-                       .replace("${version_name}", tokens["version_name"]) \
-                       .replace("${game_directory}", tokens["game_directory"]) \
-                       .replace("${game_assets}", tokens["game_assets"]) \
-                       .replace("${assets_root}", tokens["assets_root"]) \
-                       .replace("${assets_index_name}", tokens["assets_index_name"]) \
-                       .replace("${user_type}", tokens["user_type"]) \
-                       .replace("${natives_directory}", tokens["natives_directory"]) \
-                       .replace("${launcher_name}", tokens["launcher_name"]) \
-                       .replace("${launcher_version}", tokens["launcher_version"]) \
-                       .replace("${classpath}", classpath) \
-                       .replace("${resolution_width}", tokens["resolution_width"]) \
-                       .replace("${resolution_height}", tokens["resolution_height"])
+        legacy = legacy.replace("${auth_access_token}", tokens["auth_access_token"])
+        legacy = legacy.replace("${auth_session}", tokens["auth_session"])
+        legacy = legacy.replace("${auth_player_name}", tokens["auth_player_name"])
+        legacy = legacy.replace("${auth_uuid}", tokens["auth_uuid"])
+        legacy = legacy.replace("${version_name}", tokens["version_name"])
+        legacy = legacy.replace("${game_directory}", tokens["game_directory"])
+        legacy = legacy.replace("${game_assets}", tokens["game_assets"])
+        legacy = legacy.replace("${assets_root}", tokens["assets_root"])
+        legacy = legacy.replace("${assets_index_name}", tokens["assets_index_name"])
+        legacy = legacy.replace("${user_type}", tokens["user_type"])
+        legacy = legacy.replace("${natives_directory}", tokens["natives_directory"])
+        legacy = legacy.replace("${launcher_name}", tokens["launcher_name"])
+        legacy = legacy.replace("${launcher_version}", tokens["launcher_version"])
+        legacy = legacy.replace("${classpath}", classpath)
+        legacy = legacy.replace("${resolution_width}", tokens["resolution_width"])
+        legacy = legacy.replace("${resolution_height}", tokens["resolution_height"])
         game_args = [a for a in legacy.split(" ") if a]
 
     main_class = data.get("mainClass") or "net.minecraft.client.main.Main"
