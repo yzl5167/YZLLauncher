@@ -64,7 +64,7 @@ jobs:
           ls -la Output 2>/dev/null || true
           gh release delete v1.3.9 --yes --cleanup-tag 2>/dev/null || true
           if [ -f "Output/YZLLauncher-Setup-1.3.9.exe" ]; then
-            gh release create v1.3.9 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.9" --notes "①下载源新增「自动测速」，自动选用最快的国内/官方镜像；②切换页面不再整页重建，明显更流畅；③正版登录设备码超时重试+清晰提示；④新增 LittleSkin 皮肤站账号密码登录" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.3.9.exe"
+            gh release create v1.3.9 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.9" --notes "修复内置更新检测：网络连不上 GitHub API 时不再被当成『已是最新』，刷新会明确提示连接失败；连上时能正确检测到新版本" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.3.9.exe"
           else
-            gh release create v1.3.9 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.9" --notes "①下载源新增「自动测速」，自动选用最快的国内/官方镜像；②切换页面不再整页重建，明显更流畅；③正版登录设备码超时重试+清晰提示；④新增 LittleSkin 皮肤站账号密码登录" dist/YZLLauncher.exe
+            gh release create v1.3.9 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.9" --notes "修复内置更新检测：网络连不上 GitHub API 时不再被当成『已是最新』，刷新会明确提示连接失败；连上时能正确检测到新版本" dist/YZLLauncher.exe
           fi
