@@ -1,6 +1,6 @@
 ; YZL Launcher - Inno Setup installer script (ASCII/English to avoid encoding issues)
 #define MyAppName "YZL Launcher"
-#define MyAppVersion "1.4.6"
+#define MyAppVersion "1.4.7"
 #define MyAppPublisher "YZL"
 #define MyAppExeName "YZLLauncher.exe"
 
@@ -9,7 +9,8 @@ AppId={{8F2B4A6E-7C3D-4A5F-9B1E-5A0C4E1F0D2B}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\YZL
+DefaultDirName={localappdata}\Programs\YZL
+PrivilegesRequired=lowest
 DefaultGroupName=YZL
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2
