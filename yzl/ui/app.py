@@ -287,6 +287,44 @@ class App:
         card.lift()
         card.after(3600, card.destroy)
 
+    # ---- PCL 式模态反馈：下载/安装完成或出错时弹醒目对话框 ----
+    def show_success(self, title: str, msg: str = "") -> None:
+        self._show_dialog("✓ 完成", title, msg, theme.GREEN)
+
+    def show_error(self, title: str, msg: str = "") -> None:
+        self._show_dialog("✕ 出错了", title, msg, theme.RED)
+
+    def show_info(self, title: str, msg: str = "") -> None:
+        self._show_dialog("ℹ 提示", title, msg, theme.CYAN)
+
+    def _show_dialog(self, head: str, title: str, msg: str, color: str) -> None:
+        def _open() -> None:
+            try:
+                dlg = ctk.CTkToplevel(self.root)
+                dlg.title(title)
+                dlg.configure(fg_color=theme.BG)
+                dlg.transient(self.root)
+                dlg.grab_set()
+                w, h = 540, 330
+                x = self.root.winfo_x() + (W - w) // 2
+                y = self.root.winfo_y() + (H - h) // 2
+                dlg.geometry(f"{w}x{h}+{max(0,x)}+{max(0,y)}")
+                ctk.CTkLabel(dlg, text=head, text_color=color,
+                             font=(theme.ui_font(), 24, "bold")).pack(pady=(34, 6))
+                ctk.CTkLabel(dlg, text=title, text_color=theme.TEXT,
+                             font=(theme.ui_font(), 16, "bold")).pack(pady=(0, 8))
+                ctk.CTkLabel(dlg, text=msg or "", text_color=theme.SUB, justify="left",
+                             wraplength=460, font=(theme.ui_font(), 12)).pack(padx=34, pady=4)
+                ctk.CTkButton(
+                    dlg, text="确定", width=120, height=40, corner_radius=12,
+                    fg_color=color, hover_color=theme.GREEN, text_color="#0B101D",
+                    font=(theme.ui_font(), 13, "bold"), command=dlg.destroy,
+                ).pack(pady=24)
+            except Exception:
+                pass
+        self._evq.put(_open)
+
+
     def set_status(self, text: str, progress: Optional[float] = None) -> None:
         def _set() -> None:
             self.status_label.configure(text=text)

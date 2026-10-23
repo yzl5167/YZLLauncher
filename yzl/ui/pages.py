@@ -47,68 +47,6 @@ def async_set_icon(app, label: ctk.CTkLabel, url, size: int = 44, fallback_text:
     app.run_async(worker, done)
 
 
-# ---------------- 版本选择弹窗（PCL 式自定义选版本） ----------------
-class VersionPicker(ctk.CTkToplevel):
-    def __init__(self, master, app, title: str, rows: list[dict]) -> None:
-        """rows: [{version, desc, meta, size, extra, on_install}]"""
-        super().__init__(master)
-        self.app = app
-        self.title(title)
-        self.geometry("680x520")
-        self.configure(fg_color=theme.BG)
-        self.transient(master.winfo_toplevel())
-        self.grab_set()
-        self._photos = []
-
-        head = ctk.CTkFrame(self, fg_color="transparent")
-        head.pack(fill="x", padx=18, pady=(14, 10))
-        ctk.CTkLabel(head, text=title, text_color=theme.TEXT,
-                     font=(theme.ui_font(), 17, "bold")).pack(side="left")
-        ctk.CTkButton(
-            head, text="✕", width=34, height=28, corner_radius=9,
-            fg_color="transparent", hover_color=theme.RED, text_color=theme.TEXT,
-            font=(theme.ui_font(), 13), command=self.destroy,
-        ).pack(side="right")
-
-        box = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        box.pack(fill="both", expand=True, padx=12, pady=(0, 14))
-        if not rows:
-            ctk.CTkLabel(box, text="没有可用的版本", text_color=theme.SUB,
-                         font=(theme.ui_font(), 13)).pack(pady=30)
-        for r in rows:
-            row = ctk.CTkFrame(box, fg_color=theme.CARD_2, corner_radius=10)
-            row.pack(fill="x", pady=3)
-            left = ctk.CTkFrame(row, fg_color="transparent")
-            left.pack(side="left", fill="x", expand=True, padx=12, pady=8)
-            ctk.CTkLabel(left, text=r["version"], text_color=theme.TEXT, anchor="w",
-                         font=(theme.ui_font(), 13, "bold")).pack(anchor="w")
-            meta = r.get("meta") or ""
-            extra = r.get("extra") or ""
-            sub = f"{meta}　{extra}"
-            if sub.strip():
-                ctk.CTkLabel(left, text=sub, text_color=theme.SUB, anchor="w",
-                             font=(theme.ui_font(), 10)).pack(anchor="w", pady=(2, 0))
-            right = ctk.CTkFrame(row, fg_color="transparent")
-            right.pack(side="right", padx=(4, 10))
-            if r.get("badge"):
-                tag(right, r["badge"], color=theme.GREEN).pack(side="left", padx=4)
-            size = r.get("size")
-            if size:
-                ctk.CTkLabel(right, text=f"{size / 1048576:.1f}MB", text_color=theme.SUB,
-                             font=(theme.ui_font(), 10)).pack(side="left", padx=8)
-            ctk.CTkButton(
-                right, text="安装", width=64, height=28, corner_radius=9,
-                fg_color=theme.CARD_2, hover_color=theme.GREEN, text_color=theme.GREEN,
-                font=(theme.ui_font(), 11),
-                command=lambda f=r["on_install"], w=row: self._do(f, w),
-            ).pack(side="left")
-
-    def _do(self, fn, widget) -> None:
-        widget.configure(fg_color="#1E3A2F")
-        self.app.run_async(fn)
-
-
-
 # ================= 首页 =================
 class HomePage(Page):
     def on_show(self) -> None:
@@ -266,26 +204,33 @@ class HomePage(Page):
         jpath = lc.find_java(cfg.get("java_path") or "", mc_version=parent_id)
         if not jpath:
             need = javamgr.required_java(parent_id)
-            self.app.notify("正在准备 Java", f"{parent_id} 需要 Java {need}，正在自动下载…")
+            self.app.set_status(f"正在自动下载 Java {need}（{parent_id} 需要）…", 0.05)
 
             def work():
-                return javamgr.ensure(parent_id, auto_download=True)
+                return javamgr.ensure(
+                    parent_id, auto_download=True,
+                    progress=lambda d, t: self.app.set_status(
+                        f"正在下载 Java {need} {int(d / t * 100) if t else 0}%", d / t if t else 0.05))
 
             def done(j):
                 if j:
                     self._do_launch(cfg, vid, acc)
                 else:
-                    self.app.notify("Java 下载失败", "请到「设置 → 内置 Java 版本」手动下载")
+                    self.app.clear_progress()
+                    self.app.show_error("Java 下载失败",
+                                        f"无法自动下载 Java {need}。\n请到「设置 → 内置 Java 版本」手动下载，或手动指定 Java 路径。")
 
             self.app.run_async(work, done)
             return
         self._do_launch(cfg, vid, acc)
 
     def _do_launch(self, cfg, vid, acc) -> None:
+        self.app.set_status(f"正在准备启动 {vid}…", 0.85)
         try:
             spec = lc.build_launch_spec(cfg, vid, acc)
         except Exception as e:
-            self.app.notify("无法启动", str(e))
+            self.app.clear_progress()
+            self.app.show_error("无法启动", f"{vid} 启动失败：\n{str(e)}")
             return
         self.app._launching = True
         self.app.switch("console")
@@ -293,17 +238,21 @@ class HomePage(Page):
         self.app.add_log(f"[YZL] 启动版本 {vid} · 内存 {cfg.get('memory_mb')}MB")
         self.app.add_log(f"[YZL] 游戏目录 {cfg.game_dir()}")
         self.app.add_log(f"[YZL] 启动命令:\n  {' '.join(spec.cmd[:24])} ...")
+        self.app.set_status("正在启动游戏…", 0.98)
 
         def on_exit(rc: int) -> None:
             self.app._launching = False
+            self.app.clear_progress()
             self.app.add_log(f"[YZL] 游戏已退出（代码 {rc}）")
 
         try:
             proc = lc.launch(spec, on_line=self.app.add_log, on_exit=on_exit)
             self.app._proc = proc
+            self.app.set_status("游戏运行中…", 1.0)
         except Exception as e:  # noqa: BLE001
             self.app._launching = False
-            self.app.notify("启动失败", str(e))
+            self.app.clear_progress()
+            self.app.show_error("启动失败", str(e))
 
     def _open_gamedir(self) -> None:
         d = self.app.cfg.game_dir()
@@ -468,8 +417,7 @@ class VersionsPage(Page):
         cfg = self.app.cfg
 
         def progress(stage: str, done: int, total: int) -> None:
-            pct = done / total if total else 0
-            self.app.set_status(f"正在安装 {vid} · {stage} {done}/{total}", pct)
+            self.app.set_status(f"正在安装 {vid} · {stage} {done}%", done / 100)
 
         def work():
             vc.install_version(cfg.game_dir(), vid, cfg.get("mirror"), progress)
@@ -478,7 +426,7 @@ class VersionsPage(Page):
 
         def done(_):
             self.app.clear_progress()
-            self.app.notify("安装完成", f"{vid}" + ("（含 Fabric）" if fabric else ""))
+            self.app.show_success("安装完成", f"版本 {vid} 已安装成功" + ("（含 Fabric）" if fabric else ""))
             self._load_local()
             self._render_online()
 
@@ -641,23 +589,44 @@ class ModsPage(Page):
 
         def done(files):
             self.app.clear_progress()
+            for w in self.list_box.winfo_children():
+                w.destroy()
             if not files:
-                self.app.notify("无适配版本", f"{title} 没有适配 {loader} 的版本")
+                ctk.CTkLabel(self.list_box, text=f"{title} 没有适配 {loader} 的版本（试试切换加载器）",
+                             text_color=theme.SUB, font=(theme.ui_font(), 13)).pack(pady=20)
                 return
-            rows = []
+            head = ctk.CTkFrame(self.list_box, fg_color="transparent")
+            head.pack(fill="x", pady=(0, 6))
+            ctk.CTkLabel(head, text=f"选择 {title} 的版本 · {loader}", text_color=theme.TEXT,
+                         font=(theme.ui_font(), 13, "bold")).pack(side="left")
+            ctk.CTkButton(
+                head, text="◀ 返回", width=72, height=28, corner_radius=8,
+                fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.SUB,
+                font=(theme.ui_font(), 11), command=self._curated,
+            ).pack(side="right")
             for f in files[:40]:
-                gv = ",".join(f.game_versions or [])[:40]
+                row = ctk.CTkFrame(self.list_box, fg_color=theme.CARD_2, corner_radius=10)
+                row.pack(fill="x", pady=3)
+                left = ctk.CTkFrame(row, fg_color="transparent")
+                left.pack(side="left", fill="x", expand=True, padx=10, pady=8)
+                ctk.CTkLabel(left, text=f.version, text_color=theme.TEXT, anchor="w",
+                             font=(theme.ui_font(), 12, "bold")).pack(anchor="w")
+                gv = ",".join(f.game_versions or [])[:46]
                 ld = "/".join(LOADER_NAME.get(x, x) for x in (f.loaders or []))[:30]
-                badge = "✓ 适配你的版本" if mc in (f.game_versions or []) else None
-                rows.append({
-                    "version": f.version,
-                    "meta": f"MC {gv}",
-                    "extra": ld,
-                    "size": f.size,
-                    "badge": badge,
-                    "on_install": lambda mf=f: self._install_file(mf, title),
-                })
-            VersionPicker(self, self.app, f"{title} · 选择模组版本", rows)
+                ctk.CTkLabel(left, text=f"MC {gv} · {ld}", text_color=theme.SUB, anchor="w",
+                             font=(theme.ui_font(), 10)).pack(anchor="w", pady=(2, 0))
+                right = ctk.CTkFrame(row, fg_color="transparent")
+                right.pack(side="right", padx=(4, 10))
+                if mc in (f.game_versions or []):
+                    tag(right, "✓适配", color=theme.GREEN).pack(side="left", padx=4)
+                ctk.CTkLabel(right, text=f"{f.size / 1048576:.1f}MB", text_color=theme.SUB,
+                             font=(theme.ui_font(), 10)).pack(side="left", padx=6)
+                ctk.CTkButton(
+                    right, text="下载", width=58, height=26, corner_radius=8,
+                    fg_color=theme.CARD_2, hover_color=theme.GREEN, text_color=theme.GREEN,
+                    font=(theme.ui_font(), 11),
+                    command=lambda mf=f: self._install_file(mf, title),
+                ).pack(side="left")
 
         self.app.run_async(work, done)
 
@@ -672,7 +641,7 @@ class ModsPage(Page):
 
         def done(path: Path) -> None:
             self.app.clear_progress()
-            self.app.notify("模组已安装", f"{title} → mods/{base}/{path.name}\n（已适配 {base}，启动游戏自动加载）")
+            self.app.show_success("模组已下载", f"{title}\n已保存到 mods/{base}/{path.name}\n已适配 {base}，启动游戏自动加载")
 
         self.app.run_async(work, done)
 
@@ -799,20 +768,42 @@ class ShadersPage(Page):
 
         def done(files):
             self.app.clear_progress()
+            for w in self.list_box.winfo_children():
+                w.destroy()
             if not files:
-                self.app.notify("无版本", f"{title} 暂时没有可用版本")
+                ctk.CTkLabel(self.list_box, text=f"{title} 暂时没有可用版本",
+                             text_color=theme.SUB, font=(theme.ui_font(), 13)).pack(pady=20)
                 return
-            rows = []
+            head = ctk.CTkFrame(self.list_box, fg_color="transparent")
+            head.pack(fill="x", pady=(0, 6))
+            ctk.CTkLabel(head, text=f"选择 {title} 的版本", text_color=theme.TEXT,
+                         font=(theme.ui_font(), 13, "bold")).pack(side="left")
+            ctk.CTkButton(
+                head, text="◀ 返回", width=72, height=28, corner_radius=8,
+                fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.SUB,
+                font=(theme.ui_font(), 11), command=self._curated,
+            ).pack(side="right")
             for f in files[:40]:
-                badge = "✓ 适配" if mc and mc in (f.mc_version or "") else None
-                rows.append({
-                    "version": f.version,
-                    "meta": f"MC {f.mc_version}",
-                    "size": f.size,
-                    "badge": badge,
-                    "on_install": lambda mf=f: self._install_file(mf, title),
-                })
-            VersionPicker(self, self.app, f"{title} · 选择光影版本", rows)
+                row = ctk.CTkFrame(self.list_box, fg_color=theme.CARD_2, corner_radius=10)
+                row.pack(fill="x", pady=3)
+                left = ctk.CTkFrame(row, fg_color="transparent")
+                left.pack(side="left", fill="x", expand=True, padx=10, pady=8)
+                ctk.CTkLabel(left, text=f.version, text_color=theme.TEXT, anchor="w",
+                             font=(theme.ui_font(), 12, "bold")).pack(anchor="w")
+                ctk.CTkLabel(left, text=f"MC {f.mc_version}", text_color=theme.SUB, anchor="w",
+                             font=(theme.ui_font(), 10)).pack(anchor="w", pady=(2, 0))
+                right = ctk.CTkFrame(row, fg_color="transparent")
+                right.pack(side="right", padx=(4, 10))
+                if mc and mc in (f.mc_version or ""):
+                    tag(right, "✓适配", color=theme.GREEN).pack(side="left", padx=4)
+                ctk.CTkLabel(right, text=f"{f.size / 1048576:.1f}MB", text_color=theme.SUB,
+                             font=(theme.ui_font(), 10)).pack(side="left", padx=6)
+                ctk.CTkButton(
+                    right, text="下载", width=58, height=26, corner_radius=8,
+                    fg_color=theme.CARD_2, hover_color=theme.GREEN, text_color=theme.GREEN,
+                    font=(theme.ui_font(), 11),
+                    command=lambda mf=f: self._install_file(mf, title),
+                ).pack(side="left")
 
         self.app.run_async(work, done)
 
@@ -824,7 +815,7 @@ class ShadersPage(Page):
 
         def done(path: Path) -> None:
             self.app.clear_progress()
-            self.app.notify("光影已安装", f"{title} → shaderpacks/{path.name}\n（游戏内需先装 Iris/Oculus 光影加载器）")
+            self.app.show_success("光影已下载", f"{title}\n已保存到 shaderpacks/{path.name}\n游戏内需先装 Iris/Oculus 光影加载器")
 
         self.app.run_async(work, done)
 
@@ -1274,7 +1265,7 @@ class SettingsPage(Page):
 
         def done(folder) -> None:
             self.app.clear_progress()
-            self.app.notify("Java 已装好", f"Java {maj} 已安装到 {folder.name}，启动对应版本会自动使用")
+            self.app.show_success("Java 已装好", f"Java {maj} 已安装，启动对应版本会自动使用")
             self._refresh_java()
 
         self.app.run_async(work, done)
