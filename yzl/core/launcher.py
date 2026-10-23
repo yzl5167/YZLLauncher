@@ -38,14 +38,14 @@ class LaunchError(RuntimeError):
     pass
 
 
-def find_java(custom: str = "", mc_version: str = "") -> Optional[str]:
+def find_java(custom: str = "", mc_version: str = "", game_dir=None) -> Optional[str]:
     """优先返回内置的适配版本 Java；其次系统检测。"""
     if custom and Path(custom).exists():
         return custom
     if mc_version:
         try:
             from yzl.core import javamgr
-            b = javamgr.builtin_java(mc_version)
+            b = javamgr.builtin_java(mc_version, game_dir)
             if b:
                 return b
         except Exception:
@@ -143,10 +143,10 @@ def build_launch_spec(cfg: Config, version_id: str, account: dict) -> LaunchSpec
         return TOKEN.sub(rep, text)
 
     memory = int(cfg.get("memory_mb") or 2048)
-    java = find_java(cfg.get("java_path") or "", mc_version=parent_id)
+    java = find_java(cfg.get("java_path") or "", mc_version=parent_id, game_dir=game_dir)
     if not java:
         from yzl.core import javamgr
-        raise LaunchError(f"未找到 Java！{parent_id} 需要 Java {javamgr.required_java(parent_id)}，"
+        raise LaunchError(f"未找到 Java！{parent_id} 需要 Java {javamgr.required_java(parent_id, game_dir)}，"
                           f"可在「设置 → 内置 Java 版本」自动下载")
 
     jvm: list[str] = [java, f"-Xmx{memory}M", "-Xms{0}M".format(max(256, memory // 8))]
