@@ -300,6 +300,61 @@ def install_version(
         progress("完成", 100, 100)
 
 
+def missing_assets(game_dir: Path, index: dict) -> list[str]:
+    """返回资产索引中尚未下载到本地的对象 hash 列表（用于启动前完整性检查）。"""
+    ad = assets_dir(game_dir)
+    missing = []
+    for obj in index.get("objects", {}).values():
+        h = obj.get("hash", "")
+        if not h:
+            continue
+        if not (ad / "objects" / h[:2] / h).exists():
+            missing.append(h)
+    return missing
+
+
+def ensure_assets(
+    game_dir: Path,
+    parent_id: str,
+    mirror: str = "bmclapi",
+    progress: Optional[ProgressCb] = None,
+    cancel: Optional[Callable[[], bool]] = None,
+) -> None:
+    """确保版本所需的资源对象已全部就绪；缺失部分自动补下。
+    用于解决『资源文件没下完就启动 → MC 加载纹理 NoSuchFileException 崩溃』的问题。
+    progress 回调传 (已完成对象数, 总缺失数)。"""
+    data = load_version_json(game_dir, parent_id)
+    ai = data.get("assetIndex") or {}
+    index_id = ai.get("id") or data.get("assets") or "legacy"
+    index_dest = assets_dir(game_dir) / "indexes" / f"{index_id}.json"
+    if not index_dest.exists():
+        net.download_with_fallback(net.asset_index_urls(mirror, index_id, ai.get("url")), index_dest)
+    try:
+        index = json.loads(index_dest.read_text(encoding="utf-8"))
+    except Exception:
+        index = {}
+    tasks = []
+    for obj in index.get("objects", {}).values():
+        h = obj.get("hash", "")
+        if not h:
+            continue
+        dest = assets_dir(game_dir) / "objects" / h[:2] / h
+        if dest.exists():
+            continue
+        tasks.append((net.asset_object_urls(mirror, h), dest, h, obj.get("size")))
+    total = len(tasks)
+    if total == 0:
+        return
+    done = 0
+    for urls, dest, h, size in tasks:
+        if cancel and cancel():
+            raise NetError("资源下载已取消")
+        net.download_with_fallback(urls, dest, h, size)
+        done += 1
+        if progress:
+            progress(done, total)
+
+
 class ParallelPool:
     """串行/并发混合：按数量决定并发。progress 传全局 0-100 百分比。"""
 
