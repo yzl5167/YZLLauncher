@@ -55,16 +55,16 @@ jobs:
           if (-not $iscc) { Write-Error "ISCC not found"; exit 1 }
           & $iscc.FullName "YZLLauncher.iss"
           Get-ChildItem Output | Select-Object Name,Length
-      - name: 发布 Release v1.4.5
+      - name: 发布 Release v1.4.6
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -la dist 2>/dev/null || true
           ls -la Output 2>/dev/null || true
-          gh release delete v1.4.5 --yes --cleanup-tag 2>/dev/null || true
-          if [ -f "Output/YZLLauncher-Setup-1.4.5.exe" ]; then
-            gh release create v1.4.5 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.5" --notes "v1.4.5：①设置页改为可滚动，底部『保存设置』等内容不再被裁掉；②『↻ 检查启动器更新』按钮固定在设置页顶部，进设置页即可看到；③修复设置页在部分窗口尺寸下内容显示不全的问题。" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.4.5.exe"
+          gh release delete v1.4.6 --yes --cleanup-tag 2>/dev/null || true
+          if [ -f "Output/YZLLauncher-Setup-1.4.6.exe" ]; then
+            gh release create v1.4.6 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.6" --notes "v1.4.6：①设置页重新设计——『💾 保存设置』与『↻ 检查启动器更新』都固定在顶部，永远可见；②新增『JVM 参数』自定义与『自动更新』开关；③下载进度改为按已下载字节实时更新（大文件也能动），不再卡住；④版本清单多镜像自动回退、网络超时缩短，点安装版本不再长时间无反应；⑤更新下载失败会明确弹提示。" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.4.6.exe"
           else
-            gh release create v1.4.5 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.5" --notes "v1.4.5：①设置页改为可滚动，底部『保存设置』等内容不再被裁掉；②『↻ 检查启动器更新』按钮固定在设置页顶部，进设置页即可看到；③修复设置页在部分窗口尺寸下内容显示不全的问题。" dist/YZLLauncher.exe
+            gh release create v1.4.6 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.6" --notes "v1.4.6：①设置页重新设计——『💾 保存设置』与『↻ 检查启动器更新』都固定在顶部，永远可见；②新增『JVM 参数』自定义与『自动更新』开关；③下载进度改为按已下载字节实时更新（大文件也能动），不再卡住；④版本清单多镜像自动回退、网络超时缩短，点安装版本不再长时间无反应；⑤更新下载失败会明确弹提示。" dist/YZLLauncher.exe
           fi
