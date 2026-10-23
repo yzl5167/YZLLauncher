@@ -4,7 +4,7 @@ from __future__ import annotations
 import subprocess
 import time
 from pathlib import Path
-from tkinter import filedialog, simpledialog
+from tkinter import filedialog, messagebox, simpledialog
 
 import customtkinter as ctk
 
@@ -509,8 +509,14 @@ class InstalledPage(Page):
         self.app.switch("home")
 
     def _delete_version(self, vid: str) -> None:
+        if not messagebox.askyesno(
+                "删除版本",
+                f"确定要删除版本「{vid}」吗？\n其 mods/{vid} 下的模组也会一并删除，且不可恢复。",
+                parent=self):
+            return
         import shutil
         shutil.rmtree(vc.versions_dir(self.app.cfg.game_dir()) / vid, ignore_errors=True)
+        shutil.rmtree(self.app.cfg.game_dir() / "mods" / vid, ignore_errors=True)
         self._load_local()
 
     def _rename_version(self, old: str) -> None:
@@ -532,6 +538,9 @@ class InstalledPage(Page):
             old_j = dst / f"{old}.json"
             if old_j.exists():
                 old_j.rename(dst / f"{new}.json")
+            old_jar = dst / f"{old}.jar"
+            if old_jar.exists():
+                old_jar.rename(dst / f"{new}.jar")
             jp = dst / f"{new}.json"
             if jp.exists():
                 try:

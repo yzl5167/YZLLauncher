@@ -435,10 +435,11 @@ class App:
                 if on_done:
                     self._evq.put(lambda: on_done(result))
             except Exception as e:  # noqa: BLE001
+                msg = f"{type(e).__name__}: {e}"
                 if on_error:
-                    self._evq.put(lambda: on_error(e))
+                    self._evq.put(lambda m=msg: on_error(m))
                 else:
-                    self._evq.put(lambda: self.notify("操作失败", str(e)))
+                    self._evq.put(lambda m=msg: self.notify("操作失败", m))
                 self._evq.put(self.clear_progress)
         threading.Thread(target=worker, daemon=True).start()
 
