@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "YZL启动器"
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.4.1"
 LAUNCHER_NAME = "YZL"
 LAUNCHER_VERSION = APP_VERSION
 
