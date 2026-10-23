@@ -65,15 +65,17 @@ def search_mods(
     mc_version: Optional[str] = None,
     loaders: Sequence[str] = ("fabric",),
     limit: int = 20,
+    offset: int = 0,
 ) -> list[ModInfo]:
-    """全版本搜索：传入 mc_version 时按版本过滤，否则返回全部版本命中。"""
+    """全版本搜索：传入 mc_version 时按版本过滤，否则返回全部版本命中。
+    不带 query 时返回该筛选条件下的全部项目（用于浏览全部模组库），offset 用于分页。"""
     facets = []
     if mc_version:
         facets.append([f"versions:{mc_version}"])
     if loaders:
         # Modrinth 将加载器归入 categories 维度
         facets.append([f"categories:{l}" for l in loaders])
-    params = f"query={quote(query)}&facets={_fmt_facets(facets)}&limit={limit}&index=relevance"
+    params = f"query={quote(query)}&facets={_fmt_facets(facets)}&limit={limit}&offset={offset}&index=relevance"
     url = f"{API}/search?{params}"
     data = get_json(url, timeout=20)
     hits = data.get("hits", [])

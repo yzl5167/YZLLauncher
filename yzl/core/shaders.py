@@ -11,6 +11,7 @@ from yzl.core.net import NetError, get_json
 
 API = "https://api.modrinth.com/v2"
 
+# 精选光影包（slug 对应 Modrinth shader 项目）
 CURATED = [
     ("bsl-shaders", "BSL Shaders", "经典全能光影，画质与性能均衡，可调性强"),
     ("complementary-shaders", "Complementary Shaders", "口碑极佳的高画质光影，分 V4/V5"),
@@ -41,18 +42,28 @@ class ShaderFile:
 
 
 def project_info(slug: str) -> dict:
+    """光影项目详情（含 icon_url）。"""
     return get_json(f"{API}/project/{slug}", timeout=20)
 
 
-def search_shaders(query: str, limit: int = 20) -> list[ShaderInfo]:
+def search_shaders(query: str, limit: int = 20, offset: int = 0) -> list[ShaderInfo]:
     facets = quote(json.dumps([["project_type:shader"]], separators=(",", ":")))
-    url = f"{API}/search?query={quote(query)}&facets={facets}&limit={limit}&index=relevance"
+    url = f"{API}/search?query={quote(query)}&facets={facets}&limit={limit}&offset={offset}&index=relevance"
     data = get_json(url, timeout=20)
     hits = data.get("hits", [])
-    return [ShaderInfo(slug=h.get("slug", ""), title=h.get("title", "未知"), description=(h.get("description") or "")[:140], icon=h.get("icon_url")) for h in hits]
+    return [
+        ShaderInfo(
+            slug=h.get("slug", ""),
+            title=h.get("title", "未知"),
+            description=(h.get("description") or "")[:140],
+            icon=h.get("icon_url"),
+        )
+        for h in hits
+    ]
 
 
 def get_shader_files(slug: str, mc_version: Optional[str] = None) -> list[ShaderFile]:
+    """光影包版本（zip 资源包）。传入 mc_version 时优先匹配兼容版本。"""
     url = f"{API}/project/{slug}/version"
     data = get_json(url, timeout=20)
     out: list[ShaderFile] = []
@@ -63,12 +74,24 @@ def get_shader_files(slug: str, mc_version: Optional[str] = None) -> list[Shader
         primary = next((f for f in files if f.get("primary")), files[0])
         gv = v.get("game_versions") or []
         mc = mc_version if mc_version in gv else (gv[0] if gv else "")
-        out.append(ShaderFile(version=v.get("version_number", ""), filename=primary.get("filename", ""), url=primary.get("url", ""), size=primary.get("size", 0), mc_version=mc))
+        out.append(ShaderFile(
+            version=v.get("version_number", ""),
+            filename=primary.get("filename", ""),
+            url=primary.get("url", ""),
+            size=primary.get("size", 0),
+            mc_version=mc,
+        ))
     return out[:8]
 
 
-def install_shader(file: ShaderFile, game_dir: Path, progress: Optional[Callable[[int, int], None]] = None) -> Path:
+def install_shader(
+    file: ShaderFile,
+    game_dir: Path,
+    progress: Optional[Callable[[int, int], None]] = None,
+) -> Path:
+    """下载到 {game_dir}/shaderpacks/。返回目标路径。"""
     from yzl.core.net import download_file
+
     d = game_dir / "shaderpacks"
     d.mkdir(parents=True, exist_ok=True)
     dest = d / file.filename
