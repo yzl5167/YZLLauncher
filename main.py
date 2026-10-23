@@ -24,6 +24,31 @@ def _init_x_threads() -> None:
             pass
 
 
+def _log_error(tb: str) -> None:
+    """把未捕获异常写到 yzl_error.log，避免 windowed exe 里静默崩溃。"""
+    try:
+        import datetime
+
+        from yzl.constants import app_root
+
+        with open(app_root() / "yzl_error.log", "a", encoding="utf-8") as f:
+            f.write(f"\n===== {datetime.datetime.now()} =====\n{tb}\n")
+    except Exception:
+        pass
+
+
+def _install_excepthook() -> None:
+    def hook(t, v, tb):
+        try:
+            import traceback
+
+            _log_error("".join(traceback.format_exception(t, v, tb)))
+        except Exception:
+            pass
+
+    sys.excepthook = hook
+
+
 def main() -> None:
     # 自检模式：不启动图形界面，仅验证打包完整性（供打包产物自测用）
     if "--selftest" in sys.argv:
@@ -48,6 +73,7 @@ def main() -> None:
     _init_x_threads()
     from yzl.ui.app import run
 
+    _install_excepthook()
     run()
 
 

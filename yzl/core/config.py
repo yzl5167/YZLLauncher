@@ -61,7 +61,15 @@ class Config:
         return Path(gd) if gd else default_game_dir()
 
     def accounts(self) -> list[dict]:
-        return self.data.get("accounts", [])
+        """返回账户列表；清洗掉旧版遗留的非 dict / 缺 name 的脏数据，避免后续 KeyError。"""
+        accs = self.data.get("accounts", [])
+        if not accs:
+            return []
+        cleaned = []
+        for a in accs:
+            if isinstance(a, dict) and isinstance(a.get("name"), str) and a["name"].strip():
+                cleaned.append(a)
+        return cleaned
 
     def current_account(self) -> Optional[dict]:
         """返回当前账户 dict；兼容旧数据把 current_account 存成名字字符串的情况。"""
