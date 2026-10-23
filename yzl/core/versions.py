@@ -223,6 +223,7 @@ def install_version(
 ) -> None:
     """安装一个原版版本：JSON + 客户端jar + 库 + 资源索引 + 资源对象。
     progress 回调传 (阶段, 全局完成百分比 0-100, 100)，供 UI 平滑显示。"""
+    mirror = net.effective_mirror(mirror)
     manifest = fetch_manifest(mirror)
     meta = next((v for v in manifest.get("versions", []) if v["id"] == vid), None)
     if meta is None:
@@ -331,6 +332,7 @@ def ensure_assets(
     """确保版本所需的资源对象已全部就绪；缺失部分自动补下。
     用于解决『资源文件没下完就启动 → MC 加载纹理 NoSuchFileException 崩溃』的问题。
     progress 回调传 (已完成对象数, 总缺失数)。"""
+    mirror = net.effective_mirror(mirror)
     data = load_version_json(game_dir, parent_id)
     ai = data.get("assetIndex") or {}
     index_id = ai.get("id") or data.get("assets") or "legacy"
@@ -452,6 +454,7 @@ def install_fabric(
     cancel: Optional[Callable[[], bool]] = None,
 ) -> str:
     """安装 Fabric Loader，返回 Fabric 版本 id。需先装好原版。"""
+    mirror = net.effective_mirror(mirror)
     if mc_id not in list_local_versions(game_dir):
         raise NetError("请先安装原版版本")
 

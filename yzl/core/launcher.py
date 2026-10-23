@@ -33,6 +33,21 @@ RECOMMENDED_JVM = [
     "-XX:G1HeapRegionSize=32M",
 ]
 
+AUTHLIB_INJECTOR_URL = "https://authlib-injector.yushi.moe/authlib-injector-1.2.5.jar"
+
+
+def _ensure_authlib_injector(game_dir: Path) -> Optional[str]:
+    """确保 LittleSkin 所需的 authlib-injector.jar 存在，返回其绝对路径（失败返回 None）。"""
+    dest = game_dir / "authlib-injector.jar"
+    if dest.exists() and dest.stat().st_size > 0:
+        return str(dest)
+    try:
+        from yzl.core import net
+        net.download_file(AUTHLIB_INJECTOR_URL, dest, timeout=120)
+        return str(dest) if dest.exists() else None
+    except Exception:
+        return None
+
 
 class LaunchError(RuntimeError):
     pass
@@ -135,7 +150,8 @@ def build_launch_spec(cfg: Config, version_id: str, account: dict) -> LaunchSpec
         "game_assets": str(assets_root / "virtual" / "legacy"),
         "assets_root": str(assets_root),
         "assets_index_name": index_id,
-        "user_type": "msa" if account.get("type") == "microsoft" else "legacy",
+        "user_type": ("msa" if account.get("type") == "microsoft"
+                      else ("mojang" if account.get("type") in ("littleskin", "yggdrasil") else "legacy")),
         "natives_directory": str(natives),
         "launcher_name": LAUNCHER_NAME,
         "launcher_version": LAUNCHER_VERSION,
@@ -159,6 +175,11 @@ def build_launch_spec(cfg: Config, version_id: str, account: dict) -> LaunchSpec
 
     jvm: list[str] = [java, f"-Xmx{memory}M", "-Xms{0}M".format(max(256, memory // 8))]
     jvm += RECOMMENDED_JVM
+    # LittleSkin 皮肤站：注入 authlib-injector，让 MC 走 LittleSkin 认证服务器
+    if account.get("type") in ("littleskin", "yggdrasil"):
+        inj = _ensure_authlib_injector(game_dir)
+        if inj:
+            jvm.insert(0, f"-javaagent:{inj}=https://littleskin.cn/api/yggdrasil")
     if CURRENT_OS == "windows":
         jvm.append("-Dfile.encoding=UTF-8")
 
