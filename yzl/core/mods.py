@@ -125,6 +125,9 @@ def all_mod_versions(
     return out
 
 
+_versions_cache: dict = {}
+
+
 def get_mod_versions(
     slug: str,
     mc_version: str,
@@ -132,6 +135,10 @@ def get_mod_versions(
 ) -> list[ModFile]:
     """返回该模组中同时匹配 mc_version 与所选加载器的版本（按发布时间新→旧）。"""
     want_loaders = set(loaders)
+    _ck = (slug, mc_version, tuple(loaders))
+    _hit = _versions_cache.get(_ck)
+    if _hit is not None:
+        return _hit
     out: list[ModFile] = []
     for v in _project_versions(slug):
         gv = v.get("game_versions") or []
@@ -154,6 +161,7 @@ def get_mod_versions(
             date=v.get("date_published", ""),
         ))
     out.sort(key=lambda m: _ts(m.date), reverse=True)
+    _versions_cache[_ck] = out
     return out
 
 
