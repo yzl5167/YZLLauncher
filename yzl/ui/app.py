@@ -110,6 +110,26 @@ class App:
 
         self.run_async(work, done, err)
 
+    # ---- 手动检查启动器更新（设置页按钮触发）----
+    def check_update_manual(self) -> None:
+        self.set_status("正在检查更新…", 0.1)
+
+        def work():
+            return updater.check_latest()
+
+        def done(info):
+            self.clear_progress()
+            if info and info.get("exe_url"):
+                self._offer_update(info)
+            else:
+                self.show_info("已是最新版本", f"当前 v{constants.APP_VERSION} 已是最新版")
+
+        def err(e):
+            self.clear_progress()
+            self.show_error("检查更新失败", f"无法连接更新服务器：\n{str(e)}")
+
+        self.run_async(work, done, err)
+
     # ---------------- 界面骨架 ----------------
     def _build_shell(self) -> None:
         self.titlebar = ctk.CTkFrame(self.root, height=TITLE_H, fg_color=theme.CARD, corner_radius=0)
