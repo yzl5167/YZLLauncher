@@ -64,7 +64,10 @@ class App:
     # ---------------- 自动更新 ----------------
     def _check_update(self) -> None:
         def work():
-            return updater.check_latest()
+            try:
+                return updater.check_latest()
+            except Exception:
+                return None  # 启动时后台静默，避免连不上更新服务器就弹窗打扰
 
         def done(info):
             if info and info.get("exe_url"):
