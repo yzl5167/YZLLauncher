@@ -341,7 +341,13 @@ class App:
                     font=(theme.ui_font(), 13, "bold"), command=dlg.destroy,
                 ).pack(pady=24)
             except Exception:
-                pass
+                try:
+                    import traceback
+                    from yzl.constants import app_root
+                    with open(app_root() / "yzl_error.log", "a", encoding="utf-8") as f:
+                        f.write(f"\n[show_dialog]{traceback.format_exc()}\n")
+                except Exception:
+                    pass
         self._evq.put(_open)
 
 
