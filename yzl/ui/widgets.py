@@ -130,11 +130,12 @@ class GradientButton(tk.Canvas):
         self.bold = bold
         self._hover = False
         self._pressed = False
-        self.bind("<Button-1>", self._on_click)
+        # 注意：<Button-1> 与 <ButtonPress-1> 是同一个事件，若同时 bind 后一个会覆盖前一个，
+        # 导致 command 永远不被触发（点击完全无反应）。改为 press / release 分离，release 时触发 command。
+        self.bind("<ButtonPress-1>", self._on_press)
+        self.bind("<ButtonRelease-1>", self._on_release)
         self.bind("<Enter>", lambda e: self._set_hover(True))
         self.bind("<Leave>", lambda e: self._set_hover(False))
-        self.bind("<ButtonPress-1>", lambda e: self._set_pressed(True))
-        self.bind("<ButtonRelease-1>", lambda e: self._set_pressed(False))
         self.redraw()
 
     def _set_hover(self, v: bool) -> None:
@@ -147,7 +148,11 @@ class GradientButton(tk.Canvas):
             self._pressed = v
             self.redraw()
 
-    def _on_click(self, _e) -> None:
+    def _on_press(self, _e) -> None:
+        self._set_pressed(True)
+
+    def _on_release(self, _e) -> None:
+        self._set_pressed(False)
         if self.command:
             self.command()
 
