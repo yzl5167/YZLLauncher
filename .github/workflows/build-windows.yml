@@ -55,16 +55,16 @@ jobs:
           if (-not $iscc) { Write-Error "ISCC not found"; exit 1 }
           & $iscc.FullName "YZLLauncher.iss"
           Get-ChildItem Output | Select-Object Name,Length
-      - name: 发布 Release v1.3.7
+      - name: 发布 Release v1.3.8
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -la dist 2>/dev/null || true
           ls -la Output 2>/dev/null || true
-          gh release delete v1.3.7 --yes --cleanup-tag 2>/dev/null || true
-          if [ -f "Output/YZLLauncher-Setup-1.3.7.exe" ]; then
-            gh release create v1.3.7 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.7" --notes "启动前自动补全缺失游戏资源，修复资源未下完就启动导致的 MC 纹理加载 NoSuchFileException 崩溃闪退；下载进度增加百分比显示；按钮 hover 高亮优化为不再与文字同色" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.3.7.exe"
+          gh release delete v1.3.8 --yes --cleanup-tag 2>/dev/null || true
+          if [ -f "Output/YZLLauncher-Setup-1.3.8.exe" ]; then
+            gh release create v1.3.8 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.8" --notes "大幅加速游戏版本下载：资源对象由串行改为多线程并发下载，线程数跟随设置中的「下载线程」，下载速度显著提升" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.3.8.exe"
           else
-            gh release create v1.3.7 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.7" --notes "启动前自动补全缺失游戏资源，修复资源未下完就启动导致的 MC 纹理加载 NoSuchFileException 崩溃闪退；下载进度增加百分比显示；按钮 hover 高亮优化为不再与文字同色" dist/YZLLauncher.exe
+            gh release create v1.3.8 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.3.8" --notes "大幅加速游戏版本下载：资源对象由串行改为多线程并发下载，线程数跟随设置中的「下载线程」，下载速度显著提升" dist/YZLLauncher.exe
           fi
