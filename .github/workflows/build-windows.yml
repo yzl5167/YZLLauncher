@@ -55,16 +55,16 @@ jobs:
           if (-not $iscc) { Write-Error "ISCC not found"; exit 1 }
           & $iscc.FullName "YZLLauncher.iss"
           Get-ChildItem Output | Select-Object Name,Length
-      - name: 发布 Release v1.4.3
+      - name: 发布 Release v1.4.4
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -la dist 2>/dev/null || true
           ls -la Output 2>/dev/null || true
-          gh release delete v1.4.3 --yes --cleanup-tag 2>/dev/null || true
-          if [ -f "Output/YZLLauncher-Setup-1.4.3.exe" ]; then
-            gh release create v1.4.3 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.3" --notes "v1.4.3：①版本下载页去掉已安装区块，只留下载；②下载版本时每行可选加载器(原版/Fabric/Quilt/NeoForge/Forge)一键安装；③整合包拖入窗口自动导入；④模组版本列表获取加快；⑤修复内置更新检测：改用静态版本号文件(不走API限流)" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.4.3.exe"
+          gh release delete v1.4.4 --yes --cleanup-tag 2>/dev/null || true
+          if [ -f "Output/YZLLauncher-Setup-1.4.4.exe" ]; then
+            gh release create v1.4.4 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.4" --notes "v1.4.4：①模组中心/光影中心默认即可浏览全部模组与全部光影（像 PCL 一样翻页『加载更多』翻到底），不再只显示精选；②搜索与精选保留，一键切换；③资源按当前版本+加载器自动适配。" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.4.4.exe"
           else
-            gh release create v1.4.3 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.3" --notes "v1.4.3：①版本下载页去掉已安装区块，只留下载；②下载版本时每行可选加载器(原版/Fabric/Quilt/NeoForge/Forge)一键安装；③整合包拖入窗口自动导入；④模组版本列表获取加快；⑤修复内置更新检测：改用静态版本号文件(不走API限流)" dist/YZLLauncher.exe
+            gh release create v1.4.4 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.4" --notes "v1.4.4：①模组中心/光影中心默认即可浏览全部模组与全部光影（像 PCL 一样翻页『加载更多』翻到底），不再只显示精选；②搜索与精选保留，一键切换；③资源按当前版本+加载器自动适配。" dist/YZLLauncher.exe
           fi
