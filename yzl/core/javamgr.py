@@ -11,18 +11,37 @@ from yzl.core import net
 from yzl.core.net import CURRENT_OS, NetError
 
 ADOPTIUM = "https://api.adoptium.net/v3/assets/latest"
-SUPPORTED = (8, 17, 21)  # 覆盖 1.16 及以下 / 1.17-1.20.4 / 1.20.5+
+# 覆盖 1.16 及以下(8) / 1.17-1.20.4(17) / 1.20.5+(21) / 新版快照&预览(25)
+SUPPORTED = (8, 17, 21, 25)
 
 
 def _nums(mc: str) -> list[int]:
     return [int(x) for x in re.findall(r"\d+", mc or "")]
 
 
-def required_java(mc_version: str) -> int:
-    """根据 Minecraft 版本返回需要的 Java 大版本。"""
+def required_java(mc_version: str, game_dir=None) -> int:
+    """返回该 Minecraft 版本需要的 Java 大版本。
+    优先读版本 JSON 的官方 javaVersion.majorVersion；读不到再按版本号启发式。"""
+    if game_dir is not None:
+        try:
+            from yzl.core import versions as vv
+            data = vv.resolve_version(game_dir, mc_version)
+            for _ in range(3):
+                jv = (data or {}).get("javaVersion") or {}
+                maj = jv.get("majorVersion")
+                if maj:
+                    return int(maj)
+                parent = (data or {}).get("inheritsFrom")
+                if not parent:
+                    break
+                data = vv.load_version_json(game_dir, parent)
+        except Exception:
+            pass
     p = _nums(mc_version)
     if not p:
         return 21
+    if p[0] >= 25:
+        return 25
     if p[0] == 1 and len(p) >= 2:
         minor = p[1]
         if minor <= 16:
@@ -66,9 +85,9 @@ def list_installed() -> dict[int, Optional[str]]:
     return out
 
 
-def builtin_java(mc_version: str) -> Optional[str]:
+def builtin_java(mc_version: str, game_dir=None) -> Optional[str]:
     """返回内置的、适配该 MC 版本的 Java 路径；未装返回 None。"""
-    maj = required_java(mc_version)
+    maj = required_java(mc_version, game_dir)
     exe = _find_java_exe(java_dir() / f"jdk-{maj}")
     return str(exe) if exe else None
 
@@ -132,16 +151,16 @@ def download(major: int, progress: Optional[Callable[[int, int], None]] = None) 
     return folder
 
 
-def ensure(mc_version: str, auto_download: bool = True,
+def ensure(mc_version: str, auto_download: bool = True, game_dir=None,
            progress: Optional[Callable[[int, int], None]] = None) -> Optional[str]:
     """确保有适配 mc_version 的内置 Java，返回 java 路径；失败返回 None。"""
-    exe = builtin_java(mc_version)
+    exe = builtin_java(mc_version, game_dir)
     if exe:
         return exe
     if auto_download:
         try:
-            download(required_java(mc_version), progress=progress)
-            return builtin_java(mc_version)
+            download(required_java(mc_version, game_dir), progress=progress)
+            return builtin_java(mc_version, game_dir)
         except Exception:
             return None
     return None
