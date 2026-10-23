@@ -1526,6 +1526,11 @@ class SettingsPage(Page):
         ctk.CTkLabel(top, text="设置", text_color=theme.TEXT,
                      font=(theme.ui_font(), 20, "bold")).pack(side="left")
         ctk.CTkButton(
+            top, text="💾 保存设置", width=110, height=34, corner_radius=12,
+            fg_color=theme.CYAN, hover_color=theme.GREEN, text_color="#0B101D",
+            font=(theme.ui_font(), 12, "bold"), command=self._save,
+        ).pack(side="right", padx=(0, 8))
+        ctk.CTkButton(
             top, text="↻ 检查启动器更新", width=150, height=34, corner_radius=12,
             fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.GREEN,
             font=(theme.ui_font(), 12, "bold"), command=self.app.check_update_manual,
@@ -1647,15 +1652,30 @@ class SettingsPage(Page):
         self.th_slider.set(cfg.get("download_threads"))
         self.th_slider.pack(side="right", padx=(0, 16))
 
-        btns = ctk.CTkFrame(scroll, fg_color="transparent")
-        btns.pack(anchor="w", pady=(18, 0))
-        ctk.CTkButton(
-            btns, text="💾 保存设置", width=140, height=40, corner_radius=12,
-            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
-            font=(theme.ui_font(), 14, "bold"), command=self._save,
-        ).pack(side="left")
-        ctk.CTkLabel(btns, text="自动按版本选 Java（1.16↔8·1.17-1.20.4↔17·1.20.5+↔21·新版25.x↔25）",
-                     text_color=theme.SUB, font=(theme.ui_font(), 11)).pack(side="left", padx=16)
+        # JVM 启动参数
+        r = row("JVM 参数")
+        self.jvm_entry = ctk.CTkEntry(
+            r, height=34, corner_radius=10, fg_color=theme.CARD_2,
+            border_color=theme.BORDER, text_color=theme.TEXT, font=(theme.ui_font(), 12),
+        )
+        self.jvm_entry.insert(0, cfg.get("jvm_args") or "")
+        self.jvm_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        ctk.CTkLabel(r, text="（空格分隔，如 -Dfml.readTimeout=120）", text_color=theme.SUB,
+                     font=(theme.ui_font(), 10)).pack(side="right")
+
+        # 自动更新
+        r = row("自动更新")
+        self.auto_update = ctk.CTkSwitch(
+            r, text="启动时检查并提示新版本", onvalue=1, offvalue=0,
+            fg_color=theme.CARD_2, progress_color=theme.CYAN, button_color=theme.CYAN,
+            font=(theme.ui_font(), 12), text_color=theme.TEXT,
+        )
+        self.auto_update.pack(side="left")
+        if cfg.get("auto_update"):
+            self.auto_update.select()
+
+        ctk.CTkLabel(scroll, text="提示：改动后点右上角「💾 保存设置」生效 · 内置 Java 自动按版本选择（1.16↔8 · 1.17-1.20.4↔17 · 1.20.5+↔21 · 新版25.x↔25）",
+                     text_color=theme.SUB, font=(theme.ui_font(), 11)).pack(anchor="w", pady=(14, 6))
 
     def _refresh_java(self) -> None:
         for w in self._java_frame.winfo_children():
@@ -1730,6 +1750,8 @@ class SettingsPage(Page):
             self.app.notify("分辨率无效", "请输入整数")
             return
         cfg.set("download_threads", int(self.th_slider.get()))
+        cfg.set("jvm_args", self.jvm_entry.get().strip())
+        cfg.set("auto_update", bool(getattr(self, "auto_update", None) and self.auto_update.get()))
         self.app.notify("已保存", "设置已写入 config.json")
 
 

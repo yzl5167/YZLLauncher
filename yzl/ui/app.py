@@ -61,7 +61,8 @@ class App:
         self.splash.geometry(f"520x300+{self.root.winfo_x() + (W - 520) // 2}+{self.root.winfo_y() + (H - 300) // 2}")
         self._draw_splash()
         self.splash.after(2200, self._close_splash)
-        self._check_update()
+        if self.cfg.get("auto_update"):
+            self._check_update()
 
     # ---------------- 整合包拖拽导入 ----------------
     def _setup_dnd(self) -> None:
