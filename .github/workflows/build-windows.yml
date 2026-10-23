@@ -55,16 +55,16 @@ jobs:
           if (-not $iscc) { Write-Error "ISCC not found"; exit 1 }
           & $iscc.FullName "YZLLauncher.iss"
           Get-ChildItem Output | Select-Object Name,Length
-      - name: 发布 Release v1.4.0
+      - name: 发布 Release v1.4.1
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -la dist 2>/dev/null || true
           ls -la Output 2>/dev/null || true
-          gh release delete v1.4.0 --yes --cleanup-tag 2>/dev/null || true
-          if [ -f "Output/YZLLauncher-Setup-1.4.0.exe" ]; then
-            gh release create v1.4.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.0" --notes "v1.4.0：①账户页可滚动，换皮肤不再被压没；②首页启动按钮青绿渐变美化；③模组/光影图标下载失败自动重试，稳定显示；④修复内置更新检测：网络连不上 GitHub API 不再被当成『已最新』" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.4.0.exe"
+          gh release delete v1.4.1 --yes --cleanup-tag 2>/dev/null || true
+          if [ -f "Output/YZLLauncher-Setup-1.4.1.exe" ]; then
+            gh release create v1.4.1 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.1" --notes "v1.4.1：①换皮肤卡片移到账户页最顶部，一进来就能看到，不再被压没；②启动游戏按钮改方形+纯色；③模组/光影精选条目也加载图标，图标稳定显示" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.4.1.exe"
           else
-            gh release create v1.4.0 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.0" --notes "v1.4.0：①账户页可滚动，换皮肤不再被压没；②首页启动按钮青绿渐变美化；③模组/光影图标下载失败自动重试，稳定显示；④修复内置更新检测：网络连不上 GitHub API 不再被当成『已最新』" dist/YZLLauncher.exe
+            gh release create v1.4.1 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.1" --notes "v1.4.1：①换皮肤卡片移到账户页最顶部，一进来就能看到，不再被压没；②启动游戏按钮改方形+纯色；③模组/光影精选条目也加载图标，图标稳定显示" dist/YZLLauncher.exe
           fi
