@@ -69,7 +69,7 @@ def effective_mirror(mirror: str) -> str:
     return mirror if mirror in ("bmclapi", "mojang") else "bmclapi"
 
 
-def get_json(url: str, timeout: int = 30, tries: int = 3) -> dict:
+def get_json(url: str, timeout: int = 12, tries: int = 3) -> dict:
     last: Optional[Exception] = None
     for i in range(tries):
         try:
@@ -83,7 +83,7 @@ def get_json(url: str, timeout: int = 30, tries: int = 3) -> dict:
     raise NetError(f"请求失败: {url} ({last})")
 
 
-def http_text(url: str, timeout: int = 30, tries: int = 3) -> str:
+def http_text(url: str, timeout: int = 12, tries: int = 3) -> str:
     """获取纯文本内容（如静态版本号文件）；失败抛 NetError。"""
     last: Optional[Exception] = None
     for i in range(tries):
@@ -182,14 +182,43 @@ class ParallelDownloader:
         tasks: Sequence[tuple[Sequence[str], Path, Optional[str], Optional[int]]],
         progress: Optional[ProgressCb] = None,
     ) -> tuple[int, int]:
-        total = len(tasks)
+        import threading
+        n = len(tasks)
+        total_bytes = sum((s if s and s > 0 else 0) for (_, _, _, s) in tasks)
+        use_bytes = total_bytes > 0
+        lock = threading.Lock()
+        _bytes = [0] * n
+        last_pct = [-1]
+
+        def report() -> None:
+            if not progress:
+                return
+            with lock:
+                if use_bytes:
+                    pct = int(sum(_bytes) / total_bytes * 100)
+                else:
+                    pct = int(sum(1 for b in _bytes if b > 0) / n * 100)
+            if pct != last_pct[0]:
+                last_pct[0] = pct
+                progress("下载", pct, 100)
+
+        def mk_cb(i: int) -> Callable[[int, int], None]:
+            def _cb(d: int, t: int) -> None:
+                with lock:
+                    _bytes[i] = d if t and d else d
+                report()
+            return _cb
+
         done = 0
         failed = 0
         with ThreadPoolExecutor(max_workers=self.workers) as ex:
-            futures = {
-                ex.submit(download_with_fallback, urls, dest, sha1, size): i
-                for i, (urls, dest, sha1, size) in enumerate(tasks)
-            }
+            futures = {}
+            for i, (urls, dest, sha1, size) in enumerate(tasks):
+                f = ex.submit(
+                    download_with_fallback, urls, dest, sha1, size,
+                    mk_cb(i),
+                )
+                futures[f] = i
             for fut in as_completed(futures):
                 done += 1
                 try:
@@ -197,8 +226,8 @@ class ParallelDownloader:
                         failed += 1
                 except Exception:
                     failed += 1
-                if progress:
-                    progress("下载", done, total)
+                report()
+        report()
         return done - failed, failed
 
 

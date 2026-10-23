@@ -118,13 +118,21 @@ def fetch_manifest(mirror: str = "bmclapi", force: bool = False) -> dict:
                 return json.loads(MANIFEST_CACHE.read_text(encoding="utf-8"))
             except Exception:
                 pass
-    data = get_json(net.manifest_url(mirror))
-    try:
-        MANIFEST_CACHE.parent.mkdir(parents=True, exist_ok=True)
-        MANIFEST_CACHE.write_text(json.dumps(data), encoding="utf-8")
-    except Exception:
-        pass
-    return data
+    # 多镜像自动回退：首选镜像失败立即尝试备用，避免某镜像网络不通时长时间无反应
+    order = [mirror, "mojang"] if mirror != "mojang" else ["mojang", "bmclapi"]
+    last = None
+    for m in order:
+        try:
+            data = get_json(net.manifest_url(m), timeout=12)
+            try:
+                MANIFEST_CACHE.parent.mkdir(parents=True, exist_ok=True)
+                MANIFEST_CACHE.write_text(json.dumps(data), encoding="utf-8")
+            except Exception:
+                pass
+            return data
+        except Exception as e:  # noqa: BLE001
+            last = e
+    raise NetError(f"无法获取版本清单（已尝试 {order}）：{last}")
 
 
 def all_versions(mirror: str = "bmclapi") -> list[dict]:

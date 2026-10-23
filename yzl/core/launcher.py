@@ -175,6 +175,10 @@ def build_launch_spec(cfg: Config, version_id: str, account: dict) -> LaunchSpec
 
     jvm: list[str] = [java, f"-Xmx{memory}M", "-Xms{0}M".format(max(256, memory // 8))]
     jvm += RECOMMENDED_JVM
+    # 用户自定义 JVM 参数（设置 → JVM 参数，空格分隔）
+    _extra = (cfg.get("jvm_args") or "").strip()
+    if _extra:
+        jvm.extend([a for a in _extra.split() if a])
     # LittleSkin 皮肤站：注入 authlib-injector，让 MC 走 LittleSkin 认证服务器
     if account.get("type") in ("littleskin", "yggdrasil"):
         inj = _ensure_authlib_injector(game_dir)

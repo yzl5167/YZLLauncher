@@ -15,6 +15,8 @@ DEFAULTS: dict[str, Any] = {
     "width": 0,                # 0 -> 游戏默认
     "height": 0,
     "download_threads": 8,
+    "jvm_args": "",          # 额外 JVM 启动参数（空格分隔）
+    "auto_update": True,     # 启动时自动检查更新
     "accounts": [],            # [{name, uuid, type, access_token?, skin?}]
     "current_account": None,
     "current_version": None,   # 最近使用的版本 id
