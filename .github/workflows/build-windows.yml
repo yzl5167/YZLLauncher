@@ -64,7 +64,7 @@ jobs:
           ls -la Output 2>/dev/null || true
           gh release delete v1.4.2 --yes --cleanup-tag 2>/dev/null || true
           if [ -f "Output/YZLLauncher-Setup-1.4.2.exe" ]; then
-            gh release create v1.4.2 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.2" --notes "v1.4.2：①新增「已安装版本」独立页，支持版本重命名/启动/删除；②支持把整合包(.zip/.mrpack)拖进启动器自动导入并纳入已安装版本，完成后有反馈；③模组版本列表获取加快（内存缓存）；④启动进度在右下角同步显示百分比；⑤继续优化模组/光影图标显示" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.4.2.exe"
+            gh release create v1.4.2 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.2" --notes "v1.4.2：①新增「已安装版本」独立页，支持重命名/启动/删除；②整合包(.zip/.mrpack)拖进窗口自动导入，完成后有反馈；③模组版本列表获取加快；④启动进度右下角同步百分比；⑤继续优化图标显示；⑥修复内置更新检测：改用静态版本号文件(不走API限流)，连不上时明确提示" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.4.2.exe"
           else
-            gh release create v1.4.2 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.2" --notes "v1.4.2：①新增「已安装版本」独立页，支持版本重命名/启动/删除；②支持把整合包(.zip/.mrpack)拖进启动器自动导入并纳入已安装版本，完成后有反馈；③模组版本列表获取加快（内存缓存）；④启动进度在右下角同步显示百分比；⑤继续优化模组/光影图标显示" dist/YZLLauncher.exe
+            gh release create v1.4.2 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.2" --notes "v1.4.2：①新增「已安装版本」独立页，支持重命名/启动/删除；②整合包(.zip/.mrpack)拖进窗口自动导入，完成后有反馈；③模组版本列表获取加快；④启动进度右下角同步百分比；⑤继续优化图标显示；⑥修复内置更新检测：改用静态版本号文件(不走API限流)，连不上时明确提示" dist/YZLLauncher.exe
           fi
