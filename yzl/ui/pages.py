@@ -66,7 +66,7 @@ class VersionPicker(ctk.CTkToplevel):
                      font=(theme.ui_font(), 17, "bold")).pack(side="left")
         ctk.CTkButton(
             head, text="✕", width=34, height=28, corner_radius=9,
-            fg_color="transparent", hover_color=theme.RED, text_color=theme.TEXT,
+            fg_color="transparent", hover_color=theme.BORDER, text_color=theme.TEXT,
             font=(theme.ui_font(), 13), command=self.destroy,
         ).pack(side="right")
 
@@ -98,7 +98,7 @@ class VersionPicker(ctk.CTkToplevel):
                              font=(theme.ui_font(), 10)).pack(side="left", padx=8)
             ctk.CTkButton(
                 right, text="安装", width=64, height=28, corner_radius=9,
-                fg_color=theme.CARD_2, hover_color=theme.GREEN, text_color=theme.GREEN,
+                fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.GREEN,
                 font=(theme.ui_font(), 11),
                 command=lambda f=r["on_install"], w=row: self._do(f, w),
             ).pack(side="left")
@@ -193,7 +193,7 @@ class HomePage(Page):
         self.java_status.pack(anchor="w", padx=20, pady=(6, 4))
         self.java_dl_btn = ctk.CTkButton(
             right, text="⬇ 下载所需 Java", width=180, height=34, corner_radius=10,
-            fg_color=theme.CARD_2, hover_color=theme.CYAN, text_color=theme.CYAN,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
             font=(theme.ui_font(), 12), command=self._dl_needed_java,
         )
         self.java_dl_btn.pack(anchor="w", padx=20, pady=(0, 6))
@@ -353,7 +353,31 @@ class HomePage(Page):
 
             self.app.run_async(work, done)
             return
-        self._do_launch(cfg, vid, acc)
+        self._prepare_assets_and_launch(cfg, vid, acc, parent_id, gd)
+
+    def _prepare_assets_and_launch(self, cfg, vid, acc, parent_id, gd) -> None:
+        """启动前检查资源完整性；缺失则自动补下，全部就绪后才真正启动。
+        修复『资源文件只下到一半就启动 → MC 加载纹理 NoSuchFileException 崩溃闪退』。"""
+        self.app.set_status("正在检查游戏资源…", 0.6)
+        mirror = cfg.get("mirror") or "bmclapi"
+
+        def work():
+            vc.ensure_assets(gd, parent_id, mirror,
+                             progress=lambda d, t: self.app.set_status(
+                                 f"正在补全资源 {int(d / t * 100) if t else 0}%（{d}/{t}）…",
+                                 0.6 + 0.35 * (d / t if t else 0)))
+            return True
+
+        def done(_):
+            self.app.set_status("资源就绪，正在启动…", 0.95)
+            self._do_launch(cfg, vid, acc)
+
+        def err(e):
+            self.app.clear_progress()
+            self.app.show_error("资源补全失败",
+                                f"无法下载缺失的资源文件：\n{str(e)}\n\n可稍后重试，或在「设置 → 下载源」切换试试。")
+
+        self.app.run_async(work, done, err)
 
     def _do_launch(self, cfg, vid, acc) -> None:
         self.app.set_status(f"正在准备启动 {vid}…", 0.85)
@@ -468,13 +492,13 @@ class VersionsPage(Page):
                          font=(theme.ui_font(), 12)).pack(side="left", padx=10, pady=8)
             ctk.CTkButton(
                 row, text="启动", width=52, height=26, corner_radius=8,
-                fg_color=theme.CARD_2, hover_color=theme.CYAN,
+                fg_color=theme.CARD_2, hover_color=theme.BORDER,
                 text_color=theme.CYAN, font=(theme.ui_font(), 11),
                 command=lambda v=vid: self._launch_version(v),
             ).pack(side="right", padx=(2, 8), pady=6)
             ctk.CTkButton(
                 row, text="删", width=34, height=26, corner_radius=8,
-                fg_color=theme.CARD_2, hover_color=theme.RED,
+                fg_color=theme.CARD_2, hover_color=theme.BORDER,
                 text_color=theme.SUB, font=(theme.ui_font(), 11),
                 command=lambda v=vid: self._delete_version(v),
             ).pack(side="right", pady=6)
@@ -539,13 +563,13 @@ class VersionsPage(Page):
             else:
                 ctk.CTkButton(
                     row, text="安装", width=54, height=26, corner_radius=8,
-                    fg_color=theme.CARD_2, hover_color=theme.CYAN,
+                    fg_color=theme.CARD_2, hover_color=theme.BORDER,
                     text_color=theme.CYAN, font=(theme.ui_font(), 11),
                     command=lambda v=vid: self._install_version(v, fabric=False),
                 ).pack(side="right", padx=(2, 8), pady=6)
                 ctk.CTkButton(
                     row, text="装Fabric", width=70, height=26, corner_radius=8,
-                    fg_color=theme.CARD_2, hover_color=theme.VIOLET,
+                    fg_color=theme.CARD_2, hover_color=theme.BORDER,
                     text_color=theme.VIOLET, font=(theme.ui_font(), 11),
                     command=lambda v=vid: self._install_version(v, fabric=True),
                 ).pack(side="right", pady=6)
@@ -606,7 +630,7 @@ class ModsPage(Page):
         auto_loader = mods_core.detect_loader(cfg.game_dir(), cfg.get("current_version") or "")
         self.loader_menu = ctk.CTkSegmentedButton(
             ctrl, values=["Fabric", "Forge", "NeoForge", "Quilt"], height=34, corner_radius=10,
-            fg_color=theme.CARD_2, selected_color=theme.VIOLET, selected_hover_color=theme.VIOLET,
+            fg_color=theme.CARD_2, selected_color=theme.VIOLET, selected_hover_color=theme.BORDER,
             text_color=theme.SUB, font=(theme.ui_font(), 12),
         )
         default_loader = {"fabric": "Fabric", "forge": "Forge", "neoforge": "NeoForge", "quilt": "Quilt",
@@ -699,7 +723,7 @@ class ModsPage(Page):
                      font=(theme.ui_font(), 11), wraplength=460, justify="left").pack(anchor="w", pady=(4, 0))
         ctk.CTkButton(
             inner, text="选择版本 ▸", width=100, height=32, corner_radius=10,
-            fg_color=theme.CARD_2, hover_color=theme.GREEN, text_color=theme.GREEN,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.GREEN,
             font=(theme.ui_font(), 12),
             command=lambda s=slug, t=title: self._pick_version(s, t),
         ).pack(side="right", anchor="s", padx=(8, 0))
@@ -760,7 +784,7 @@ class ModsPage(Page):
                              font=(theme.ui_font(), 10)).pack(side="left", padx=6)
                 ctk.CTkButton(
                     right, text="下载", width=58, height=26, corner_radius=8,
-                    fg_color=theme.CARD_2, hover_color=theme.GREEN, text_color=theme.GREEN,
+                    fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.GREEN,
                     font=(theme.ui_font(), 11),
                     command=lambda mf=f: self._install_file(mf, title),
                 ).pack(side="left")
@@ -773,7 +797,7 @@ class ModsPage(Page):
 
         def work():
             def p(done: int, total: int) -> None:
-                self.app.set_status(f"正在下载 {f.filename}", done / total if total else 0.2)
+                self.app.set_status(f"正在下载 {f.filename} {int(done / total * 100) if total else 0}%", done / total if total else 0.2)
             return mods_core.install_mod(f, self.app.cfg.game_dir(), base, p)
 
         def done(path: Path) -> None:
@@ -879,7 +903,7 @@ class ShadersPage(Page):
                      font=(theme.ui_font(), 11), wraplength=460, justify="left").pack(anchor="w", pady=(4, 0))
         ctk.CTkButton(
             inner, text="选择版本 ▸", width=100, height=32, corner_radius=10,
-            fg_color=theme.CARD_2, hover_color=theme.GREEN, text_color=theme.GREEN,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.GREEN,
             font=(theme.ui_font(), 12),
             command=lambda s=slug, t=title: self._pick_version(s, t),
         ).pack(side="right", anchor="s", padx=(8, 0))
@@ -937,7 +961,7 @@ class ShadersPage(Page):
                              font=(theme.ui_font(), 10)).pack(side="left", padx=6)
                 ctk.CTkButton(
                     right, text="下载", width=58, height=26, corner_radius=8,
-                    fg_color=theme.CARD_2, hover_color=theme.GREEN, text_color=theme.GREEN,
+                    fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.GREEN,
                     font=(theme.ui_font(), 11),
                     command=lambda mf=f: self._install_file(mf, title),
                 ).pack(side="left")
@@ -947,7 +971,7 @@ class ShadersPage(Page):
     def _install_file(self, f, title: str) -> None:
         def work():
             def p(done: int, total: int) -> None:
-                self.app.set_status(f"正在下载 {f.filename}", done / total if total else 0.2)
+                self.app.set_status(f"正在下载 {f.filename} {int(done / total * 100) if total else 0}%", done / total if total else 0.2)
             return sh_core.install_shader(f, self.app.cfg.game_dir(), p)
 
         def done(path: Path) -> None:
@@ -980,7 +1004,7 @@ class AccountsPage(Page):
         row.pack(fill="x")
         self.ms_btn = ctk.CTkButton(
             row, text="🔑  使用微软账号登录", width=190, height=40, corner_radius=12,
-            fg_color=theme.CARD_2, hover_color=theme.CYAN, text_color=theme.CYAN,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
             font=(theme.ui_font(), 13, "bold"), command=self._ms_login,
         )
         self.ms_btn.pack(side="left")
@@ -1004,7 +1028,7 @@ class AccountsPage(Page):
         self.name_entry.pack(side="left", fill="x", expand=True)
         ctk.CTkButton(
             row, text="＋ 添加", width=90, height=40, corner_radius=12,
-            fg_color=theme.CARD_2, hover_color=theme.CYAN, text_color=theme.CYAN,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
             font=(theme.ui_font(), 13), command=self._add,
         ).pack(side="left", padx=(10, 0))
 
@@ -1032,7 +1056,7 @@ class AccountsPage(Page):
         ).pack(side="left", padx=(0, 10))
         self.skin_apply = ctk.CTkButton(
             sk_row, text="上传/应用", width=96, height=36, corner_radius=10,
-            fg_color=theme.CARD_2, hover_color=theme.GREEN, text_color=theme.GREEN,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.GREEN,
             font=(theme.ui_font(), 12), command=self._apply_skin,
         )
         self.skin_apply.pack(side="left")
@@ -1078,13 +1102,13 @@ class AccountsPage(Page):
                          font=(theme.ui_font(), 10)).pack(side="left", padx=8)
             ctk.CTkButton(
                 row, text="使用", width=54, height=28, corner_radius=9,
-                fg_color=theme.CARD_2, hover_color=theme.CYAN, text_color=theme.CYAN,
+                fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
                 font=(theme.ui_font(), 11),
                 command=lambda n=a["name"]: self._use(n),
             ).pack(side="right", padx=(2, 10), pady=8)
             ctk.CTkButton(
                 row, text="删除", width=54, height=28, corner_radius=9,
-                fg_color=theme.CARD_2, hover_color=theme.RED, text_color=theme.RED,
+                fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.RED,
                 font=(theme.ui_font(), 11),
                 command=lambda n=a["name"]: self._del(n),
             ).pack(side="right", pady=8)
@@ -1113,7 +1137,7 @@ class AccountsPage(Page):
         url_label.pack(padx=20)
         ctk.CTkButton(
             dlg, text="取消", width=100, height=34, corner_radius=10,
-            fg_color=theme.CARD_2, hover_color=theme.RED, text_color=theme.RED,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.RED,
             font=(theme.ui_font(), 12),
             command=lambda: (cancel.__setitem__("flag", True), dlg.destroy()),
         ).pack(pady=(18, 12))
@@ -1366,12 +1390,12 @@ class SettingsPage(Page):
         btns.pack(anchor="w", pady=(18, 0))
         ctk.CTkButton(
             btns, text="💾 保存设置", width=140, height=40, corner_radius=12,
-            fg_color=theme.CARD_2, hover_color=theme.CYAN, text_color=theme.CYAN,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
             font=(theme.ui_font(), 14, "bold"), command=self._save,
         ).pack(side="left")
         ctk.CTkButton(
             btns, text="↻ 检查启动器更新", width=140, height=40, corner_radius=12,
-            fg_color=theme.CARD_2, hover_color=theme.GREEN, text_color=theme.GREEN,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.GREEN,
             font=(theme.ui_font(), 13, "bold"), command=self.app.check_update_manual,
         ).pack(side="left", padx=(10, 0))
         ctk.CTkLabel(btns, text="自动按版本选 Java（1.16↔8·1.17-1.20.4↔17·1.20.5+↔21·新版25.x↔25）",
@@ -1393,7 +1417,7 @@ class SettingsPage(Page):
             else:
                 tag(line, "未安装", color=theme.SUB).pack(side="left", padx=6)
                 ctk.CTkButton(line, text="下载", width=56, height=26, corner_radius=8,
-                              fg_color=theme.CARD_2, hover_color=theme.CYAN, text_color=theme.CYAN,
+                              fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
                               font=(theme.ui_font(), 11),
                               command=lambda m=maj: self._download_java(m)).pack(side="right", padx=(6, 0))
 
@@ -1402,7 +1426,7 @@ class SettingsPage(Page):
 
         def work():
             def p(done: int, total: int) -> None:
-                self.app.set_status(f"下载 Java {maj}", done / total if total else 0.2)
+                self.app.set_status(f"下载 Java {maj} {int(done / total * 100) if total else 0}%", done / total if total else 0.2)
             return javamgr.download(maj, p)
 
         def done(folder) -> None:
