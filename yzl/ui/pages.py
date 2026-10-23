@@ -24,8 +24,13 @@ class Page(ctk.CTkFrame):
     def __init__(self, master, app) -> None:
         super().__init__(master, fg_color=theme.BG, corner_radius=0)
         self.app = app
+        self._first_show = True
 
     def on_show(self) -> None:  # pragma: no cover - 子类覆盖
+        pass
+
+    def on_reshow(self) -> None:
+        """切页缓存：页面已构建过、再次显示时仅刷新动态部分，避免整页重建卡顿。"""
         pass
 
 
@@ -206,6 +211,15 @@ class HomePage(Page):
 
         self._refresh()
 
+    @staticmethod
+    def _acc_label(a: dict) -> str:
+        kind = {"microsoft": "正版", "littleskin": "LittleSkin"}.get(a.get("type"), "离线")
+        return f"{a['name']}（{kind}）"
+
+    def on_reshow(self) -> None:
+        # 切页缓存：只刷新版本/账户菜单与版本详情，不整页重建
+        self._refresh()
+
     def _refresh(self) -> None:
         cfg = self.app.cfg
         local = vc.list_local_versions(cfg.game_dir())
@@ -218,13 +232,10 @@ class HomePage(Page):
         self.ver_menu.set(cur or "（未安装版本）")
 
         accs = cfg.accounts()
-        labels = [f"{a['name']}（{'正版' if a.get('type') == 'microsoft' else '离线'}）" for a in accs] or ["（未添加账户）"]
+        labels = [self._acc_label(a) for a in accs] or ["（未添加账户）"]
         self.acc_menu.configure(values=labels)
         cur_acc = cfg.current_account()
-        self.acc_menu.set(
-            f"{cur_acc['name']}（{'正版' if cur_acc.get('type') == 'microsoft' else '离线'}）"
-            if cur_acc else "（未添加账户）"
-        )
+        self.acc_menu.set(self._acc_label(cur_acc) if cur_acc else "（未添加账户）")
 
         self._update_detail(cur)
 
@@ -319,7 +330,7 @@ class HomePage(Page):
             return
         acc = next(
             (a for a in cfg.accounts()
-             if f"{a['name']}（{'正版' if a.get('type') == 'microsoft' else '离线'}）" == acc_label),
+             if self._acc_label(a) == acc_label),
             None,
         )
         if not acc:
@@ -983,6 +994,10 @@ class ShadersPage(Page):
 
 # ================= 账户 =================
 class AccountsPage(Page):
+    def on_reshow(self) -> None:
+        # 切页缓存：仅刷新账户列表，不整页重建
+        self._render()
+
     def on_show(self) -> None:
         for w in self.winfo_children():
             w.destroy()
@@ -1011,6 +1026,26 @@ class AccountsPage(Page):
         self.ms_state = ctk.CTkLabel(row, text="未登录正版账号", text_color=theme.SUB,
                                      font=(theme.ui_font(), 11))
         self.ms_state.pack(side="left", padx=16)
+
+        # ---- LittleSkin 皮肤站登录 ----
+        ls_card = Card(pad, corner_radius=18)
+        ls_card.pack(anchor="w", fill="x", pady=(0, 14))
+        linner = ctk.CTkFrame(ls_card, fg_color="transparent")
+        linner.pack(fill="x", padx=18, pady=16)
+        ctk.CTkLabel(linner, text="LittleSkin 皮肤站登录", text_color=theme.TEXT,
+                     font=(theme.ui_font(), 15, "bold")).pack(anchor="w")
+        ctk.CTkLabel(linner, text="使用 LittleSkin 皮肤站的账号密码登录，可加载该站的皮肤/披风。",
+                     text_color=theme.SUB, font=(theme.ui_font(), 11), justify="left").pack(anchor="w", pady=(4, 10))
+        lrow = ctk.CTkFrame(linner, fg_color="transparent")
+        lrow.pack(fill="x")
+        ctk.CTkButton(
+            lrow, text="🛡  使用 LittleSkin 登录", width=190, height=40, corner_radius=12,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.GREEN,
+            font=(theme.ui_font(), 13, "bold"), command=self._littleskin_login,
+        ).pack(side="left")
+        self.ls_state = ctk.CTkLabel(lrow, text="未登录 LittleSkin", text_color=theme.SUB,
+                                     font=(theme.ui_font(), 11))
+        self.ls_state.pack(side="left", padx=16)
 
         # ---- 离线账户 ----
         card = Card(pad, width=520, corner_radius=18)
@@ -1126,7 +1161,8 @@ class AccountsPage(Page):
         dlg.configure(fg_color=theme.BG)
         dlg.transient(self.winfo_toplevel())
         dlg.grab_set()
-        msg = ctk.CTkLabel(dlg, text="正在获取设备码…", text_color=theme.TEXT, wraplength=440,
+        msg = ctk.CTkLabel(dlg, text="正在获取设备码…\n（若长时间无响应，可能是网络无法访问微软，请开加速器/代理后重试）",
+                           text_color=theme.TEXT, wraplength=440,
                            font=(theme.ui_font(), 13))
         msg.pack(padx=20, pady=(28, 8))
         code_label = ctk.CTkLabel(dlg, text="", text_color=theme.CYAN,
@@ -1188,6 +1224,86 @@ class AccountsPage(Page):
         cfg.set("current_account", acc["name"])
         self._render()
         self.app.notify("正版登录成功", f"已登录 {acc['name']}（正版）")
+
+    # ---- LittleSkin 登录 ----
+    def _littleskin_login(self) -> None:
+        if self.app._launching:
+            return
+        dlg = ctk.CTkToplevel(self)
+        dlg.title("LittleSkin 皮肤站登录")
+        dlg.geometry("460x350")
+        dlg.configure(fg_color=theme.BG)
+        dlg.transient(self.winfo_toplevel())
+        dlg.grab_set()
+        pad = ctk.CTkFrame(dlg, fg_color="transparent")
+        pad.pack(fill="both", expand=True, padx=24, pady=24)
+        ctk.CTkLabel(pad, text="LittleSkin 账号登录", text_color=theme.CYAN,
+                     font=(theme.ui_font(), 17, "bold")).pack(anchor="w")
+        ctk.CTkLabel(pad, text="请输入你在 littleskin.cn 注册的邮箱与密码。",
+                     text_color=theme.SUB, font=(theme.ui_font(), 11), justify="left").pack(anchor="w", pady=(4, 12))
+        u = ctk.CTkEntry(pad, placeholder_text="LittleSkin 邮箱", height=40, corner_radius=10,
+                         fg_color=theme.CARD_2, border_color=theme.BORDER, text_color=theme.TEXT,
+                         font=(theme.ui_font(), 13))
+        u.pack(fill="x", pady=(0, 10))
+        p = ctk.CTkEntry(pad, placeholder_text="密码", height=40, corner_radius=10, show="●",
+                         fg_color=theme.CARD_2, border_color=theme.BORDER, text_color=theme.TEXT,
+                         font=(theme.ui_font(), 13))
+        p.pack(fill="x", pady=(0, 6))
+        state = ctk.CTkLabel(pad, text="", text_color=theme.GREEN, font=(theme.ui_font(), 12))
+        state.pack(anchor="w", pady=(4, 0))
+        row = ctk.CTkFrame(pad, fg_color="transparent")
+        row.pack(fill="x", pady=(14, 0))
+        ctk.CTkButton(
+            row, text="登录", width=110, height=38, corner_radius=10,
+            fg_color=theme.CYAN, hover_color=theme.GREEN, text_color="#0B101D",
+            font=(theme.ui_font(), 13, "bold"),
+            command=lambda: self._do_ls(dlg, u, p, state),
+        ).pack(side="left")
+        ctk.CTkButton(
+            row, text="取消", width=90, height=38, corner_radius=10,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.RED,
+            font=(theme.ui_font(), 12), command=dlg.destroy,
+        ).pack(side="left", padx=(10, 0))
+
+    def _do_ls(self, dlg, u, p, state) -> None:
+        email = u.get().strip()
+        pwd = p.get()
+        if not email or not pwd:
+            state.configure(text="请输入邮箱和密码", text_color=theme.RED)
+            return
+        state.configure(text="正在登录…", text_color=theme.GREEN)
+        u.configure(state="disabled")
+        p.configure(state="disabled")
+
+        def work():
+            return ms_core.littleskin_login(email, pwd)
+
+        def done(res):
+            token, prof = res
+            acc = {"name": prof.get("name") or email.split("@")[0],
+                   "uuid": prof.get("id", ""), "type": "littleskin",
+                   "access_token": token}
+            try:
+                dlg.destroy()
+            except Exception:
+                pass
+            self._save_ls_account(acc)
+
+        def err(e):
+            state.configure(text=str(e), text_color=theme.RED)
+            u.configure(state="normal")
+            p.configure(state="normal")
+
+        self.app.run_async(work, done, err)
+
+    def _save_ls_account(self, acc: dict) -> None:
+        cfg = self.app.cfg
+        accs = [a for a in cfg.accounts() if not (a.get("type") == "littleskin" and a["name"] == acc["name"])]
+        accs.append(acc)
+        cfg.set("accounts", accs)
+        cfg.set("current_account", acc["name"])
+        self._render()
+        self.app.notify("LittleSkin 登录成功", f"已登录 {acc['name']}（LittleSkin）")
 
     # ---- 离线 ----
     def _add(self) -> None:
@@ -1349,12 +1465,15 @@ class SettingsPage(Page):
         # 下载源
         r = row("下载源")
         self.mirror_menu = ctk.CTkOptionMenu(
-            r, values=["bmclapi（国内加速）", "mojang（官方）"], width=220, height=34, corner_radius=10,
+            r, values=["auto（自动测速最快）", "bmclapi（国内加速）", "mojang（官方）"],
+            width=230, height=34, corner_radius=10,
             fg_color=theme.CARD_2, button_color=theme.CARD_2, button_hover_color=theme.BORDER,
             text_color=theme.TEXT, dropdown_fg_color=theme.CARD_2, dropdown_hover_color=theme.BORDER,
             font=(theme.ui_font(), 12), dropdown_font=(theme.ui_font(), 12),
         )
-        self.mirror_menu.set("bmclapi（国内加速）" if cfg.get("mirror") == "bmclapi" else "mojang（官方）")
+        _m = cfg.get("mirror")
+        self.mirror_menu.set("auto（自动测速最快）" if _m == "auto"
+                             else ("bmclapi（国内加速）" if _m == "bmclapi" else "mojang（官方）"))
         self.mirror_menu.pack(side="left")
 
         # 分辨率
@@ -1465,7 +1584,8 @@ class SettingsPage(Page):
         cfg.set("memory_mb", int(self.mem_slider.get()))
         cfg.set("java_path", self.java_entry.get().strip())
         cfg.set("game_dir", self.dir_entry.get().strip() or None)
-        cfg.set("mirror", "bmclapi" if "bmclapi" in self.mirror_menu.get() else "mojang")
+        _m = self.mirror_menu.get()
+        cfg.set("mirror", "auto" if "自动" in _m else ("bmclapi" if "bmclapi" in _m else "mojang"))
         try:
             cfg.set("width", int(self.w_entry.get().strip() or 0))
             cfg.set("height", int(self.h_entry.get().strip() or 0))

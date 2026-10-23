@@ -236,14 +236,20 @@ class App:
             self.pages[key] = page
 
     def _select(self, key: str) -> None:
-        if self.current:
+        if self.current and self.current != key:
             self.pages[self.current].pack_forget()
         self.current = key
         self.pages[key].pack(fill="both", expand=True)
         for k, b in self._nav_btns.items():
             b.configure(fg_color=theme.CARD_2 if k == key else "transparent",
                         text_color=theme.CYAN if k == key else theme.TEXT)
-        self.pages[key].on_show()
+        page = self.pages[key]
+        # 页面缓存：首次 on_show 构建，之后切页仅 on_reshow 刷新动态部分，避免整页重建卡顿
+        if getattr(page, "_first_show", True):
+            page._first_show = False
+            page.on_show()
+        else:
+            page.on_reshow()
 
     def switch(self, key: str) -> None:
         self._select(key)
