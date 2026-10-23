@@ -189,11 +189,6 @@ class HomePage(Page):
                 fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.TEXT,
                 font=(theme.ui_font(), 12), command=cmd,
             ).pack(side="left", padx=(0, 10))
-        ctk.CTkButton(
-            quick, text="↻ 检查更新", width=120, height=34, corner_radius=12,
-            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
-            font=(theme.ui_font(), 12), command=self.app.check_update_manual,
-        ).pack(side="left")
 
         # 右：版本详情
         right = Card(row, width=320, corner_radius=20)
@@ -1482,8 +1477,15 @@ class SettingsPage(Page):
             w.destroy()
         pad = ctk.CTkFrame(self, fg_color="transparent")
         pad.pack(fill="both", expand=True, padx=24, pady=18)
-        ctk.CTkLabel(pad, text="设置", text_color=theme.TEXT,
-                     font=(theme.ui_font(), 20, "bold")).pack(anchor="w", pady=(0, 16))
+        top = ctk.CTkFrame(pad, fg_color="transparent")
+        top.pack(fill="x", pady=(0, 16))
+        ctk.CTkLabel(top, text="设置", text_color=theme.TEXT,
+                     font=(theme.ui_font(), 20, "bold")).pack(side="left")
+        ctk.CTkButton(
+            top, text="↻ 检查启动器更新", width=150, height=34, corner_radius=12,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.GREEN,
+            font=(theme.ui_font(), 12, "bold"), command=self.app.check_update_manual,
+        ).pack(side="right")
 
         card = Card(pad, width=640, corner_radius=18)
         card.pack(anchor="w")
@@ -1606,11 +1608,6 @@ class SettingsPage(Page):
             fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
             font=(theme.ui_font(), 14, "bold"), command=self._save,
         ).pack(side="left")
-        ctk.CTkButton(
-            btns, text="↻ 检查启动器更新", width=140, height=40, corner_radius=12,
-            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.GREEN,
-            font=(theme.ui_font(), 13, "bold"), command=self.app.check_update_manual,
-        ).pack(side="left", padx=(10, 0))
         ctk.CTkLabel(btns, text="自动按版本选 Java（1.16↔8·1.17-1.20.4↔17·1.20.5+↔21·新版25.x↔25）",
                      text_color=theme.SUB, font=(theme.ui_font(), 11)).pack(side="left", padx=16)
 
