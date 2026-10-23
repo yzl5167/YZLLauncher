@@ -55,16 +55,16 @@ jobs:
           if (-not $iscc) { Write-Error "ISCC not found"; exit 1 }
           & $iscc.FullName "YZLLauncher.iss"
           Get-ChildItem Output | Select-Object Name,Length
-      - name: 发布 Release v1.4.4
+      - name: 发布 Release v1.4.5
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -la dist 2>/dev/null || true
           ls -la Output 2>/dev/null || true
-          gh release delete v1.4.4 --yes --cleanup-tag 2>/dev/null || true
-          if [ -f "Output/YZLLauncher-Setup-1.4.4.exe" ]; then
-            gh release create v1.4.4 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.4" --notes "v1.4.4：①模组中心/光影中心默认即可浏览全部模组与全部光影（像 PCL 一样翻页『加载更多』翻到底），不再只显示精选；②搜索与精选保留，一键切换；③资源按当前版本+加载器自动适配。" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.4.4.exe"
+          gh release delete v1.4.5 --yes --cleanup-tag 2>/dev/null || true
+          if [ -f "Output/YZLLauncher-Setup-1.4.5.exe" ]; then
+            gh release create v1.4.5 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.5" --notes "v1.4.5：①设置页改为可滚动，底部『保存设置』等内容不再被裁掉；②『↻ 检查启动器更新』按钮固定在设置页顶部，进设置页即可看到；③修复设置页在部分窗口尺寸下内容显示不全的问题。" dist/YZLLauncher.exe "Output/YZLLauncher-Setup-1.4.5.exe"
           else
-            gh release create v1.4.4 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.4" --notes "v1.4.4：①模组中心/光影中心默认即可浏览全部模组与全部光影（像 PCL 一样翻页『加载更多』翻到底），不再只显示精选；②搜索与精选保留，一键切换；③资源按当前版本+加载器自动适配。" dist/YZLLauncher.exe
+            gh release create v1.4.5 --repo "$GITHUB_REPOSITORY" --title "YZL 启动器 v1.4.5" --notes "v1.4.5：①设置页改为可滚动，底部『保存设置』等内容不再被裁掉；②『↻ 检查启动器更新』按钮固定在设置页顶部，进设置页即可看到；③修复设置页在部分窗口尺寸下内容显示不全的问题。" dist/YZLLauncher.exe
           fi
