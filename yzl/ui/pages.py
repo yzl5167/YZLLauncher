@@ -189,6 +189,11 @@ class HomePage(Page):
                 fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.TEXT,
                 font=(theme.ui_font(), 12), command=cmd,
             ).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(
+            quick, text="↻ 检查更新", width=120, height=34, corner_radius=12,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
+            font=(theme.ui_font(), 12), command=self.app.check_update_manual,
+        ).pack(side="left")
 
         # 右：版本详情
         right = Card(row, width=320, corner_radius=20)
@@ -602,7 +607,15 @@ class VersionsPage(Page):
             self._render_online()
             self.app.clear_progress()
 
-        self.app.run_async(fn, done)
+        def err(e: Exception) -> None:
+            self.app.clear_progress()
+            self.app.notify(
+                "获取版本清单失败",
+                "无法从镜像站拉到版本列表，通常是网络到下载源不通或太慢。\n"
+                "请检查网络后点右上角『↻ 刷新』重试；仍不行可在设置里换镜像源。\n\n" + str(e),
+            )
+
+        self.app.run_async(fn, done, err)
 
     def _render_online(self) -> None:
         if not hasattr(self, "_all") or not self._all:
