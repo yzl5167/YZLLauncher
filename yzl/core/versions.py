@@ -478,3 +478,109 @@ def install_fabric(
     if progress:
         progress("完成", 100, 100)
     return vid
+
+
+def install_loader(
+    game_dir: Path,
+    mc_id: str,
+    loader: str,
+    mirror: str = "bmclapi",
+    progress: Optional[ProgressCb] = None,
+    java: Optional[str] = None,
+) -> str:
+    """按加载器安装：vanilla / fabric / quilt / neoforge / forge。返回最终版本 id。"""
+    loader = (loader or "").strip().lower()
+    if loader in ("", "vanilla", "原版"):
+        install_version(game_dir, mc_id, mirror, progress)
+        return mc_id
+    if loader == "fabric":
+        return install_fabric(game_dir, mc_id, mirror, progress)
+    if loader == "quilt":
+        return _install_quilt(game_dir, mc_id, progress)
+    if loader in ("neoforge", "forge"):
+        return _install_installer(game_dir, mc_id, loader, progress, java)
+    raise NetError(f"不支持的加载器: {loader}")
+
+
+def _install_quilt(
+    game_dir: Path, mc_id: str, progress: Optional[ProgressCb] = None,
+) -> str:
+    """安装 Quilt Loader（用 Quilt meta 生成版本 json），返回版本 id。"""
+    if mc_id not in list_local_versions(game_dir):
+        raise NetError("请先安装原版版本")
+    if progress:
+        progress("Quilt配置", 0, 100)
+    vers = get_json(f"https://meta.quiltmc.org/v3/versions/loader/{mc_id}")
+    if not vers:
+        raise NetError("Quilt 不支持该版本")
+    lv = vers[0]["loader"]["version"]
+    profile = get_json(f"https://meta.quiltmc.org/v3/versions/loader/{mc_id}/{lv}/profile/json")
+    vid = profile.get("id") or f"quilt-loader-{lv}-{mc_id}"
+    vdir = versions_dir(game_dir) / vid
+    vdir.mkdir(parents=True, exist_ok=True)
+    (vdir / f"{vid}.json").write_text(json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8")
+    if progress:
+        progress("Quilt配置", 40, 100)
+    libs = resolve_libraries(profile)
+    ParallelPool().download_libs(libs, game_dir, progress, base=50, span=50)
+    if progress:
+        progress("完成", 100, 100)
+    return vid
+
+
+def _loader_version(mc_id: str, loader: str) -> str:
+    """获取该 mc 版本对应加载器推荐/最新版本号。"""
+    if loader == "forge":
+        data = get_json("https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json")
+        promos = data.get("promos") or {}
+        return (promos.get(f"{mc_id}-forge-recommended")
+                or promos.get(f"{mc_id}-forge-latest")
+                or "")
+    data = get_json(f"https://neoforged.net/api/mc/{mc_id}")
+    if isinstance(data, list) and data:
+        return str(data[0].get("version") or "")
+    if isinstance(data, dict):
+        vs = data.get("versions") or []
+        if vs:
+            return str(vs[0].get("version") or "")
+    return ""
+
+
+def _install_installer(
+    game_dir: Path, mc_id: str, loader: str,
+    progress: Optional[ProgressCb] = None, java: Optional[str] = None,
+) -> str:
+    """下载官方 installer jar 并运行 --installClient，完成 Forge / NeoForge 安装。"""
+    import subprocess
+    import tempfile
+    if not java or not Path(java).is_file():
+        raise NetError(f"安装 {loader} 需要 Java，请先在设置中确认 Java 路径")
+    if progress:
+        progress("获取版本", 5, 100)
+    ver = _loader_version(mc_id, loader)
+    if not ver:
+        raise NetError(f"{loader} 暂不支持版本 {mc_id}")
+    if loader == "forge":
+        url = (f"https://maven.minecraftforge.net/net/minecraftforge/forge/"
+               f"{mc_id}-{ver}/forge-{mc_id}-{ver}-installer.jar")
+    else:
+        url = (f"https://maven.neoforged.net/releases/net/neoforged/neoforge/"
+               f"{ver}/neoforge-{ver}-installer.jar")
+    if progress:
+        progress("下载安装器", 10, 100)
+    tmp = Path(tempfile.gettempdir()) / f"{loader}_{mc_id}_{ver}_installer.jar"
+    net.download_file(
+        url, tmp,
+        progress=lambda d, t: progress(
+            "下载安装器", 10 + int(55 * (d / t if t else 0)), 100))
+    if progress:
+        progress("运行安装器", 70, 100)
+    r = subprocess.run(
+        [java, "-jar", str(tmp), "--installClient", str(game_dir)],
+        capture_output=True, text=True, timeout=300)
+    tmp.unlink(missing_ok=True)
+    if r.returncode != 0:
+        raise NetError(f"{loader} 安装失败：{(r.stdout or r.stderr)[-300:]}")
+    if progress:
+        progress("完成", 100, 100)
+    return f"{loader}-{mc_id}-{ver}"
