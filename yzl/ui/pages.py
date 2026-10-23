@@ -4,7 +4,7 @@ from __future__ import annotations
 import subprocess
 import time
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, simpledialog
 
 import customtkinter as ctk
 
@@ -445,6 +445,105 @@ class HomePage(Page):
         d = self.app.cfg.game_dir() / "mods"
         d.mkdir(parents=True, exist_ok=True)
         _open_path(d)
+
+
+# ================= 已安装版本 =================
+class InstalledPage(Page):
+    def on_reshow(self) -> None:
+        self._load_local()
+
+    def on_show(self) -> None:
+        for w in self.winfo_children():
+            w.destroy()
+        pad = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        pad.pack(fill="both", expand=True, padx=24, pady=18)
+        head = ctk.CTkFrame(pad, fg_color="transparent")
+        head.pack(fill="x", pady=(0, 12))
+        ctk.CTkLabel(head, text="已安装版本", text_color=theme.TEXT,
+                     font=(theme.ui_font(), 20, "bold")).pack(side="left")
+        ctk.CTkButton(
+            head, text="↻ 刷新", width=80, height=32, corner_radius=12,
+            fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.TEXT,
+            font=(theme.ui_font(), 12), command=self._load_local,
+        ).pack(side="right")
+        ctk.CTkLabel(pad, text="把整合包（.zip / .mrpack）直接拖进启动器窗口即可自动导入，导入后会出现在这里。",
+                     text_color=theme.SUB, font=(theme.ui_font(), 11)).pack(anchor="w", pady=(0, 10))
+        self.local_box = ctk.CTkScrollableFrame(pad, fg_color="transparent")
+        self.local_box.pack(fill="both", expand=True)
+        self._load_local()
+
+    def _load_local(self) -> None:
+        for w in self.local_box.winfo_children():
+            w.destroy()
+        vids = sorted(vc.list_local_versions(self.app.cfg.game_dir()), key=str.lower)
+        if not vids:
+            ctk.CTkLabel(self.local_box, text="还没有安装任何版本\n请到「版本管理」下载，或拖入整合包导入",
+                         text_color=theme.SUB, font=(theme.ui_font(), 13)).pack(pady=30)
+            return
+        for vid in vids:
+            row = ctk.CTkFrame(self.local_box, fg_color=theme.CARD_2, corner_radius=10)
+            row.pack(fill="x", pady=4)
+            ctk.CTkLabel(row, text=vid, text_color=theme.TEXT, anchor="w",
+                         font=(theme.ui_font(), 13, "bold")).pack(side="left", padx=12, pady=10)
+            ctk.CTkButton(
+                row, text="启动", width=56, height=28, corner_radius=8,
+                fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.CYAN,
+                font=(theme.ui_font(), 11),
+                command=lambda v=vid: self._launch_version(v),
+            ).pack(side="right", padx=(2, 8), pady=6)
+            ctk.CTkButton(
+                row, text="重命名", width=64, height=28, corner_radius=8,
+                fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.AMBER,
+                font=(theme.ui_font(), 11),
+                command=lambda v=vid: self._rename_version(v),
+            ).pack(side="right", pady=6)
+            ctk.CTkButton(
+                row, text="删除", width=56, height=28, corner_radius=8,
+                fg_color=theme.CARD_2, hover_color=theme.BORDER, text_color=theme.RED,
+                font=(theme.ui_font(), 11),
+                command=lambda v=vid: self._delete_version(v),
+            ).pack(side="right", padx=(2, 4), pady=6)
+
+    def _launch_version(self, vid: str) -> None:
+        self.app.cfg.set("current_version", vid)
+        self.app.switch("home")
+
+    def _delete_version(self, vid: str) -> None:
+        import shutil
+        shutil.rmtree(vc.versions_dir(self.app.cfg.game_dir()) / vid, ignore_errors=True)
+        self._load_local()
+
+    def _rename_version(self, old: str) -> None:
+        import json as _json
+        new = simpledialog.askstring("重命名版本", f"把版本「{old}」重命名为：",
+                                     parent=self, initialvalue=old)
+        if not new:
+            return
+        new = new.strip()
+        if not new or new == old:
+            return
+        base = vc.versions_dir(self.app.cfg.game_dir())
+        src, dst = base / old, base / new
+        if dst.exists():
+            self.app.notify("名称已存在", f"已存在版本「{new}」")
+            return
+        try:
+            src.rename(dst)
+            old_j = dst / f"{old}.json"
+            if old_j.exists():
+                old_j.rename(dst / f"{new}.json")
+            jp = dst / f"{new}.json"
+            if jp.exists():
+                try:
+                    data = _json.loads(jp.read_text(encoding="utf-8"))
+                    data["id"] = new
+                    jp.write_text(_json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+                except Exception:
+                    pass
+            self.app.show_success("重命名成功", f"已把「{old}」重命名为「{new}」")
+        except Exception as e:
+            self.app.show_error("重命名失败", str(e))
+        self._load_local()
 
 
 # ================= 版本管理 =================

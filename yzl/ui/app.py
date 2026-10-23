@@ -9,12 +9,13 @@ import customtkinter as ctk
 
 from yzl import constants
 from yzl.core.config import Config
-from yzl.core import updater
+from yzl.core import modpack, updater
 from yzl.ui import theme
 from yzl.ui.pages import (
     AccountsPage,
     ConsolePage,
     HomePage,
+    InstalledPage,
     ModsPage,
     SettingsPage,
     ShadersPage,
@@ -46,6 +47,7 @@ class App:
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
         self.root.geometry(f"{W}x{H}+{(sw - W) // 2}+{max(0, (sh - H) // 2 - 20)}")
         self.root.minsize(W, H)
+        self._setup_dnd()
 
         self._build_shell()
         self._build_pages()
@@ -60,6 +62,55 @@ class App:
         self._draw_splash()
         self.splash.after(2200, self._close_splash)
         self._check_update()
+
+    # ---------------- 整合包拖拽导入 ----------------
+    def _setup_dnd(self) -> None:
+        try:
+            import tkinterdnd2
+            tkinterdnd2.TkinterDnD._require(self.root)
+            self.root.drop_target_register(tkinterdnd2.DND_FILES)
+            self.root.dnd_bind("<<Drop>>", self._on_drop)
+        except Exception:
+            pass  # 环境不支持拖拽时静默降级，不影响其它功能
+
+    def _on_drop(self, event) -> None:
+        raw = getattr(event, "data", "") or ""
+        import re
+        paths = re.findall(r"\{([^}]*)\}|(\S+)", raw)
+        files = [a or b for a, b in paths]
+        target = next((p for p in files if p.lower().endswith((".zip", ".mrpack"))), None)
+        if not target:
+            self.notify("不支持的文件", "请拖入 .zip 或 .mrpack 整合包")
+            return
+        self._import_pack(target)
+
+    def _import_pack(self, path: str) -> None:
+        cfg = self.cfg
+        self.set_status("正在导入整合包…", 0.05)
+
+        def work():
+            return modpack.import_pack(
+                path, cfg.game_dir(),
+                progress=lambda d, t: self.set_status(
+                    f"正在解压整合包 {int(d / t * 100) if t else 0}%…",
+                    0.05 + 0.9 * (d / t if t else 0)))
+
+        def done(ids: list[str]):
+            self.clear_progress()
+            if not ids:
+                self.notify("未识别到版本",
+                            "整合包里没有找到 Minecraft 版本目录（versions/*/*.json）。\n可能只包含 mods 等文件。")
+                return
+            self.show_success("整合包导入完成", "已导入版本：\n" + "\n".join(ids))
+            inst = self.pages.get("installed")
+            if inst is not None:
+                inst._load_local()
+
+        def err(e):
+            self.clear_progress()
+            self.show_error("导入失败", str(e))
+
+        self.run_async(work, done, err)
 
     # ---------------- 自动更新 ----------------
     def _check_update(self) -> None:
@@ -185,6 +236,7 @@ class App:
         items = [
             ("home", "🏠  首页"),
             ("versions", "📦  版本管理"),
+            ("installed", "📁  已安装版本"),
             ("mods", "🧩  模组中心"),
             ("shaders", "🌅  光影中心"),
             ("accounts", "👤  账户"),
@@ -226,6 +278,7 @@ class App:
         makers = {
             "home": HomePage,
             "versions": VersionsPage,
+            "installed": InstalledPage,
             "mods": ModsPage,
             "shaders": ShadersPage,
             "accounts": AccountsPage,
